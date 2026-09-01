@@ -1,0 +1,16 @@
+# Python 3.11 required. The system python on macOS (3.9) is too old for
+# current torch/demucs; see README for the uv one-liner.
+
+numpy<2                   # demucs 4.x is not numpy-2 clean
+torch>=2.1
+torchaudio
+demucs>=4.0.1             # htdemucs_6s source separation
+basic-pitch[onnx]>=0.4    # note detection; the onnx extra avoids a TensorFlow install
+soundfile>=0.12           # decodes wav/flac/ogg/mp3 without ffmpeg
+librosa>=0.10             # resampling only
+pretty_midi>=0.2.10
+
+# Pinned because of a real breakage, not preference: basic-pitch pulls in
+# resampy 0.4.2, which imports pkg_resources -- removed in setuptools 81.
+# basic-pitch caps resampy at <0.4.3, so setuptools is the side that has to give.
+setuptools<81

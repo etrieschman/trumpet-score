@@ -1,0 +1,8 @@
+.venv/
+output/
+out_*/
+__pycache__/
+*.pyc
+tests/fixture.wav
+tests/fixture.expected.txt
+.DS_Store
