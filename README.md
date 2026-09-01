@@ -143,6 +143,17 @@ fingering rather than emitting something unplayable. Where a note has several
 valid fingerings the sheet shows the first choice; the alternates are in
 `notes.json`.
 
+## Source audio quality matters more than any flag
+
+Demucs is a **stereo** model trained on full-bandwidth audio. Feed it mono and
+it gets no spatial information — one of its main cues for telling instruments
+apart. Feed it a low-bitrate file and the high harmonics are gone, which is
+exactly what a pitch model uses to distinguish a fundamental from an overtone,
+so you get octave errors and missed notes.
+
+A 62 kbps mono file of So What leaves multi-second holes in the solo that no
+threshold setting can recover. Get a stereo rip before tuning anything.
+
 ## Known limitations
 
 0. **Everything downstream inherits the separation quality.** A phone recording

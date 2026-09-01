@@ -85,19 +85,25 @@ def render(
         f"# {doc.source}",
         "# Written Bb trumpet pitch (concert +2). First-choice fingerings.",
         f"# Phrase break at gaps > {phrase_gap}s.   {OUT_OF_RANGE} = outside practical range.",
+        "# * = unplayable pitch.   ~ = outside the detected key, check these first.",
         f"# Settings: {doc.params.get('settings') or 'defaults'}",
         "",
     ]
     use_sharps = False
+    key_info = None
     if doc.notes:
-        key_info = keysig.estimate(doc.notes) if key == "auto" else keysig.from_name(key)
+        key_info = keysig.estimate(doc.notes) if key == "auto" else keysig.from_name(key)  # noqa: E501
         # Spell accidentals to match the key, so the phrase rows agree with the
         # scale above them -- F# in a sharp key, never Gb.
         use_sharps = force_sharps or key_info["use_sharps"]
         out += _key_header(key_info, use_sharps, show_octaves)
         out += ["-" * 72, ""]
 
-    flagged = 0
+    scale = set()
+    if key_info:
+        scale = {(key_info["tonic_pc"] + d) % 12 for d in keysig.DEGREES[key_info["mode"]]}
+
+    flagged = outside = 0
     for phrase in split_phrases(doc.notes, phrase_gap, max_per_line):
         cells = []
         for note in phrase:
@@ -107,9 +113,19 @@ def render(
             if not note.in_range:
                 name += "*"
                 flagged += 1
+            elif scale and note.written_midi % 12 not in scale:
+                # Either a chromatic passing tone or a detection error. Worth
+                # seeing at a glance -- an isolated one in a modal tune is
+                # almost always the latter.
+                name += "~"
+                outside += 1
             cells.append((name, note.fingering))
         out += _aligned_rows(cells, label=timestamp(phrase[0].onset_s)) + [""]
 
+    if outside:
+        out.append(f"# {outside} note(s) marked ~ fall outside the detected key -- chromatic")
+        out.append("# passing tones, or detection errors. Check these first.")
+        out.append("")
     if flagged:
         out.append(f"# {flagged} note(s) marked * fall outside F#3-C6 written and have no fingering.")
         out.append("# Try --octave-shift if a whole passage is flagged; that usually means")

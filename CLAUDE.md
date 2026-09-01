@@ -109,6 +109,15 @@ ask which sheet worked.
   modulates up a semitone and gets folded into one label.
 - `--melody-rule loudest` is implemented but never evaluated against `top`.
 
+## Audio quality is the top-of-funnel constraint
+
+The So What test file is 62 kbps MONO. Demucs is a stereo model, so mono
+removes spatial separation cues entirely, and low bitrate strips the high
+harmonics a pitch model needs to tell fundamentals from partials. Measured
+consequence: a 2.3-second hole (91.15-93.47s) with zero detections at loose
+thresholds, over a passage the user hears clearly. No parameter recovers this.
+Ask for better source audio before tuning.
+
 ## Separation must stay deterministic
 
 `apply_model(..., shifts=0)` in separate.py is load-bearing. Demucs defaults to
