@@ -87,13 +87,21 @@ def separate(
     tensor = (tensor - ref.mean()) / (ref.std() + 1e-8)
 
     print(f"[separate] running Demucs on {dev} ({wav.shape[1] / sr:.0f}s of audio)")
+    # shifts=0 is essential, not a tuning choice. Demucs defaults to shifts=1,
+    # which applies a RANDOM time shift to the input -- with a single shift
+    # there is nothing to average, so it only randomizes. That made separation
+    # unreproducible: identical input and settings produced different stems on
+    # every run, on both MPS and CPU, silently changing the transcription.
+    torch.manual_seed(0)
     try:
-        sources = apply_model(model, tensor[None], device=dev, progress=True, split=True)[0]
+        sources = apply_model(model, tensor[None], device=dev, progress=True,
+                              split=True, shifts=0)[0]
     except Exception as exc:  # MPS backends still hit unimplemented ops
         if dev == "cpu":
             raise
         print(f"[separate] {dev} failed ({exc.__class__.__name__}), retrying on cpu")
-        sources = apply_model(model, tensor[None], device="cpu", progress=True, split=True)[0]
+        sources = apply_model(model, tensor[None], device="cpu", progress=True,
+                              split=True, shifts=0)[0]
 
     sources = sources * ref.std() + ref.mean()
     picked = sources[model.sources.index(stem)].cpu().numpy().astype(np.float32)

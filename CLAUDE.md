@@ -109,6 +109,24 @@ ask which sheet worked.
   modulates up a semitone and gets folded into one label.
 - `--melody-rule loudest` is implemented but never evaluated against `top`.
 
+## Separation must stay deterministic
+
+`apply_model(..., shifts=0)` in separate.py is load-bearing. Demucs defaults to
+`shifts=1`, which applies a **random** time shift to the input; with one shift
+there is nothing to average, so it only randomizes. Identical input and
+settings produced different stems on every run, on MPS *and* CPU, silently
+changing the transcription -- a good result could not be reproduced, and
+re-running destroyed it. Verified fixed: two runs now yield identical stem
+hashes. Do not remove the seed or restore the default shifts.
+
+## Judge results against ground truth, not note counts
+
+I concluded loose thresholds "did not help" So What because the final note count
+barely moved (31 -> 35). That was the wrong measure. When the user supplied the
+actual notes, loosening turned out to fill a five-second hole in the solo with
+exactly the right figure. Count says nothing about correctness; only comparison
+against known notes does.
+
 ## Things learned the hard way
 
 - `uv venv` does not install pip. Use `VIRTUAL_ENV=.venv uv pip install ...`.
