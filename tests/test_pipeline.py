@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from trumpet_transcribe import melody, render_text, trumpet
+from trumpet_transcribe import keysig, melody, render_text, trumpet
 from trumpet_transcribe.intermediate import Note, NoteDocument
 
 # Concert -> (written name, first-choice fingering), checked against a standard chart.
@@ -77,12 +77,43 @@ def test_columns_stay_aligned_with_wide_fingerings():
     # written F#3 is 1-2-3, the widest cell; the row above must not shift.
     notes = [_note(0.0, 0.4, 52), _note(0.5, 0.4, 58)]
     sheet = render_text.render(NoteDocument(source="x", notes=notes))
-    rows = [r for r in sheet.splitlines() if r and not r.startswith("#")]
+    # Phrase rows come after the header's horizontal rule.
+    body = sheet.split("---\n", 1)[-1]
+    rows = [r for r in body.splitlines() if r and not r.startswith("#")]
     names, fings = rows[0], rows[1]
     assert "1-2-3" in fings
     # Each fingering starts at the same column as its note name.
     for cell in ("1-2-3", "0"):
         assert names[fings.index(cell)] != " ", (names, fings)
+
+
+def test_key_detection_handles_modes():
+    """A dorian tune must not be mislabelled as its relative major or minor."""
+    # D dorian: the C major note set, but centred on D.
+    scale = [62, 64, 65, 67, 69, 71, 72]
+    notes = []
+    for i, pitch in enumerate(scale + [62, 62, 69]):  # tonic and fifth emphasised
+        notes.append(_note(i * 0.5, 0.5, pitch - trumpet.TRANSPOSE))
+    info = keysig.estimate(notes)
+    assert info["mode"] in ("dorian", "mixolydian"), info
+    assert info["fifths"] == 0, info  # parent key is C major either way
+
+
+def test_scale_spans_an_octave_with_room_either_side():
+    info = keysig.from_name("F")
+    pitches = keysig.scale_pitches(info)
+    tonics = [p for p in pitches if p % 12 == info["tonic_pc"]]
+    assert len(tonics) >= 2, "should cover a full octave of the tonic"
+    assert min(pitches) < tonics[0] and max(pitches) > tonics[-1]
+    assert all(trumpet.in_range(p) for p in pitches)
+
+
+def test_sheet_header_names_the_key():
+    notes = [_note(i * 0.5, 0.4, p) for i, p in enumerate([60, 62, 64, 65, 67])]
+    sheet = render_text.render(NoteDocument(source="x", notes=notes))
+    assert "KEY" in sheet
+    assert "the scale, to jam on:" in sheet
+    assert "notes actually detected" in sheet
 
 
 def test_document_roundtrip(tmp_path=None):
@@ -110,7 +141,6 @@ def test_end_to_end_on_fixture():
     )
     # Deliverables sit in the output root; working state is cached beside them.
     assert (out / "fixture.txt").exists()
-    assert (out / "fixture.musicxml").exists()
     doc = NoteDocument.from_json(out / ".cache" / "fixture" / "notes.json")
     expected_concert = [60, 62, 64, 65, 67, 69, 70, 72, 67, 65, 62, 60]
     assert [n.concert_midi for n in doc.notes] == expected_concert

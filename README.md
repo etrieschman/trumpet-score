@@ -5,6 +5,17 @@ Takes a recording, isolates the melody, and prints a monospace note sheet in
 rhythm notation — you get rhythm by ear with the track playing.
 
 ```
+KEY    E dorian written   (D dorian concert)
+
+       the scale, to jam on:
+         B3  C#4    D4   E4   F#4  G4  A4   B4  C#5  D5  E5  F#5  G5  A5
+         2   1-2-3  1-3  1-2  2    0   1-2  2   1-2  1   0   2    0   1-2
+
+       notes actually detected, most-played first:
+         D 22%  E 19%  A 15%  G 12%  B 11%  C# 9%  F# 8%
+
+------------------------------------------------------------------------
+
   0:15   A4   B4  G4  A4   G4  E4   D4   F4  E4   C4  B3  D4
          1-2  2   0   1-2  0   1-2  1-3  1   1-2  0   2   1-3
 ```
@@ -38,12 +49,11 @@ basic-pitch and returns in well under a second:
 
 ## Output
 
-Two files per song, named after it, in `./scores/`:
+One file per song, named after it, in `./scores/`:
 
 ```
 scores/
   So What.txt              <- the note sheet
-  So What.musicxml         <- the score, opens in MuseScore
   .cache/
     So What/               <- working state, safe to delete
       stems/other.wav      cached separation (the slow step)
@@ -52,8 +62,8 @@ scores/
       raw.mid, melody.mid  MIDI byproducts
 ```
 
-`--out DIR` puts the sheet somewhere else. `--format text` writes only the text
-sheet. Deleting `.cache/` costs you nothing but time.
+`--out DIR` puts the sheet somewhere else. Deleting `.cache/` costs you nothing
+but time.
 
 `notes.json` is the contract: both renderers read only that file and never touch
 audio. Re-render from it without redoing any analysis:
@@ -82,7 +92,23 @@ catch more notes and more garbage. `--force-detect` busts the cache.
 - `--low` / `--high` concert MIDI bounds for discarding garbage
 
 **Rendering**: `--phrase-gap` (silence that starts a new line, default 1.0s),
-`--max-per-line`, `--bare-names` (print `G` not `G4`), `--sharps`.
+`--max-per-line`, `--bare-names` (print `G` not `G4`), `--sharps`,
+`--key` (override the detected key, e.g. `--key "D dorian"`).
+
+## The key header
+
+The sheet opens with the detected key, the scale to jam on with fingerings, and
+the pitch classes actually present in the recording.
+
+Key detection is Krumhansl-Schmuckler: build a duration-weighted histogram of
+the 12 pitch classes, then correlate it against a profile for each candidate
+key and take the best fit. The profiles for major and minor are empirical, from
+probe-tone listening experiments; dorian and mixolydian are derived by putting
+the same ordered scale-degree weights on those modes\' degrees. Modes matter
+here — a major/minor-only fit calls So What "E minor" instead of E dorian.
+
+The **notes actually detected** row is not a model fit, it is measured from the
+recording. When the key label looks wrong, trust that row.
 
 ## Range and fingerings
 
@@ -93,6 +119,8 @@ valid fingerings the sheet shows the first choice; the alternates are in
 
 ## Known limitations
 
+0. **Everything downstream inherits the separation quality.** A phone recording
+   of a room is much harder than the original track.
 1. **Demucs has no horn stem.** A trumpet lands in `other` together with
    strings, organ, and sax. `htdemucs_6s` at least pulls guitar and piano out of
    that stem. On a dense mix this is the weakest step in the whole pipeline.
@@ -105,8 +133,9 @@ valid fingerings the sheet shows the first choice; the alternates are in
    become one. Not separable from pitch alone without onset strength.
 4. **Melody reduction is a heuristic.** `top` is right for a lead line most of
    the time and wrong when the lead sits under a harmony part.
-5. **Accidental spelling has no key context.** You get `Gb4` where a reading
-   trumpet player would write `F#4`. `--sharps` flips the global preference.
+5. **Key detection assumes one key for the whole recording.** A tune that
+   modulates (So What's bridge goes up a semitone) gets a single label for all
+   of it. `--key` overrides.
 
 ## Tests
 
@@ -118,10 +147,7 @@ Covers the fingering chart, transposition, harmonic suppression, note merging,
 phrase splitting, column alignment, and an end-to-end run against synthetic
 audio with known pitches (`tests/make_fixture.py`).
 
-## Stage 2 (not built)
+## Sheet music
 
-MusicXML output with quantized rhythm and fingerings above the staff. It slots
-in as a new `trumpet_transcribe/render_musicxml.py` plus a `--format` branch in
-the CLI; nothing else moves, since `notes.json` already carries durations.
-Expect quantization to be the weak link — supplying a known BPM will beat
-trying to beat-track the mix.
+Not built, deliberately — see CLAUDE.md for the approach if it ever gets picked
+back up. The text sheet plus the recording is faster to learn from.

@@ -1,66 +1,75 @@
 # trumpet-score — working notes
 
-Turn a recording into a Bb trumpet part: a monospace note sheet (stage 1) and
-quantized MusicXML (stage 2). See README.md for usage.
+Turn a recording into a Bb trumpet note sheet: written pitch, valve fingerings,
+detected key. No rhythm notation — rhythm comes by ear with the track playing.
+See README.md for usage.
 
 ## Status
 
-**Stage 1 — done and verified.** Separation, detection, filtering, transposition,
-fingerings, text sheet, MIDI byproducts, caching. 9 tests pass, including an
-end-to-end run against synthetic audio with known pitches.
+**Done and verified.** Separation, detection, filtering, transposition,
+fingerings, key detection, the text sheet, MIDI byproducts, caching. 12 tests
+pass, including an end-to-end run against synthetic audio with known pitches.
 
-**Stage 2 — working, not yet hardened.** MusicXML renders and parses cleanly in
-music21; key and tempo are detected automatically so a plain run needs no input.
-Never yet opened in MuseScore by a human, and the tempo detector is the weak
-spot (see TODO).
+Sheet-music output was built and then deliberately removed — see below.
 
 ## Architecture
 
 `notes.json` is the contract. Analysis writes it; renderers read only it and
-never touch audio. Adding a renderer means adding a module and a `--format`
-choice — nothing else moves.
+never touch audio. Adding a renderer means adding a module — nothing else moves.
 
 ```
 audio.py      decode (no ffmpeg; afconvert for m4a)
 separate.py   Demucs htdemucs_6s -> stem wav        [cached]
 detect.py     basic-pitch -> raw note events        [cached]
 melody.py     harmonic suppression, monophonic reduction, filtering, merging
-tempo.py      beat-track the mix, refine against note onsets
-keysig.py     Krumhansl-Schmuckler key estimate
+keysig.py     Krumhansl-Schmuckler key + mode, scale generation
 trumpet.py    concert->written transpose, fingering chart, range check
-intermediate.py    the notes.json schema (v2)
-render_text.py     stage 1 sheet
-render_musicxml.py stage 2 score
+intermediate.py    the notes.json schema (v3)
+render_text.py     the note sheet
 ```
 
 ## Output layout
 
-Deliverables only in `scores/<song>.txt` and `scores/<song>.musicxml`. All
-working state (stems, raw detections, notes.json, MIDI) goes in
-`scores/.cache/<song>/` and is safe to delete. `--out DIR` moves the root.
+One deliverable per song: `scores/<song>.txt`. All working state (stems, raw
+detections, notes.json, MIDI) goes in `scores/.cache/<song>/` and is safe to
+delete. `--out DIR` moves the root.
 
-## TODO
+## TODO — sheet music, if it ever comes back
 
-1. **Tempo detection is the weak link, as expected.** On So What it reports
-   195 bpm (true is ~136) with `confidence 0.674`. The confidence number is
-   meaningful — below ~0.85 the tempo should not be trusted. Next steps: warn
-   loudly in the CLI when confidence is low, and try metrical relatives of the
-   reported value over a longer onset window. `--bpm` is the escape hatch and
-   works.
-2. **No triplet support.** `--grid` is 2/4/8 only; a triplet passage gets
-   mangled into 16ths. Proper support needs `<time-modification>` in the
-   MusicXML emitter and a triplet-aware duration table. Matters for jazz.
-3. **Time signature is assumed 4/4.** `--beats-per-measure` changes the count
-   but the beat unit is always a quarter, so 6/8 is not expressible.
-4. **Syncopation is notated conservatively.** A note landing off the beat
-   becomes tied pieces (dotted eighth + 16th). That is correct notation, but
-   worth eyeballing in MuseScore to see whether it reads well.
-5. **No stage 2 tests yet.** Stage 1 has coverage; `render_musicxml.py` and
-   `tempo.py` are verified only by hand against the fixture. Worth adding: a
-   quantization test, a duration-decomposition test, and a music21 round-trip.
-   `music21` is installed in the venv for exactly this but is not in
-   requirements.txt yet.
-6. **Open the output in MuseScore and look at it.** Never done.
+It was built (MusicXML, opened in MuseScore, fingerings above the staff) and
+removed in favour of the text sheet. **The working implementation is in git
+history: `git show 3fecc51`** — `render_musicxml.py` and `tempo.py`. Recover
+rather than rewrite. What was there and what it needs:
+
+1. **Restore the `tempo` field to the intermediate.** Schema went v2 -> v3 when
+   it was dropped. Renderers must not touch audio, so tempo has to be detected
+   during analysis and stored.
+2. **Tempo detection was the blocker, and it is not solved.** The approach:
+   beat-track the mix with librosa (Ellis dynamic programming), then score
+   candidate tempos and their metrical relatives by how well the *detected note
+   onsets* land on the grid. It got the synthetic fixture exactly right (100 bpm
+   from a tracker that said 117) but reported 195 for So What (true ~136) and
+   216 for Agua Fria (true ~108) — both roughly double. **Halving errors are the
+   failure mode to attack first.** It emitted a confidence score that correctly
+   flagged both failures, so gating on confidence and asking for `--bpm` is a
+   reasonable fallback.
+3. **Measure grid-fit error in SECONDS, not fractions of a grid step.** This
+   caused a real bug: a coarser grid tolerates more absolute jitter, so
+   normalized error systematically prefers half the true tempo.
+4. **No triplet support.** `--grid` was 2/4/8 only. Needs
+   `<time-modification>` in the emitter and a triplet-aware duration table.
+   Matters for jazz.
+5. **4/4 assumed.** The beat unit was always a quarter, so 6/8 was not
+   expressible.
+6. The duration decomposition (greedy longest-first, with each value required to
+   align to its own undotted base) was the part that worked well — it notates
+   syncopation as tied pieces correctly. Keep it.
+
+## Other TODO
+
+- Key detection assumes one key for the whole recording. So What's bridge
+  modulates up a semitone and gets folded into one label.
+- `--melody-rule loudest` is implemented but never evaluated against `top`.
 
 ## Things learned the hard way
 
@@ -69,6 +78,6 @@ working state (stems, raw detections, notes.json, MIDI) goes in
   setuptools 81 removed. Hence `setuptools<81` in requirements.
 - Voice Memos' group container is TCC-protected — unreadable even by `head`.
   Recordings must be dragged out to `~/Downloads` first.
-- Grid-fit tempo scoring must measure error in SECONDS. Normalizing by the grid
-  step rewards slow tempos, because a coarser grid tolerates more jitter, and
-  the detector will confidently report half the true tempo.
+- Key detection needs modes, not just major/minor. The repertoire this gets
+  pointed at is modal: So What is dorian, Agua Fria is dorian/mixolydian, and a
+  major/minor-only fit mislabels both.

@@ -13,7 +13,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from trumpet_transcribe import melody, midi_out, render_musicxml, render_text, tempo
+from trumpet_transcribe import melody, midi_out, render_text
 from trumpet_transcribe.detect import detect
 from trumpet_transcribe.intermediate import NoteDocument
 from trumpet_transcribe.separate import DEFAULT_MODEL, DEFAULT_STEM, separate
@@ -26,6 +26,7 @@ DEFAULT_ROOT = Path("scores")
 CACHE_DIR = ".cache"
 NOTES_JSON = "notes.json"
 MELODY_MIDI = "melody.mid"
+SHEET_EXT = ".txt"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -72,20 +73,8 @@ def build_parser() -> argparse.ArgumentParser:
     ren.add_argument("--sharps", action="store_true", help="spell accidentals with sharps")
     ren.add_argument("--from-notes", type=Path, metavar="NOTES_JSON",
                      help="skip all analysis and re-render an existing notes.json")
-    ren.add_argument("--format", default="both", choices=["text", "musicxml", "both"],
-                     help="which renderers to run (default: both)")
-
-    score = p.add_argument_group("sheet music (stage 2)")
-    score.add_argument("--bpm", type=float,
-                       help="override the detected tempo")
-    score.add_argument("--grid", type=int, default=4, choices=[2, 4, 8],
-                       help="quantization grid per beat: 2=8ths, 4=16ths, 8=32nds")
-    score.add_argument("--beats-per-measure", type=int, default=4)
-    score.add_argument("--key", default="auto",
-                       help="key signature, e.g. F, Bb, 'D minor' (default: detected)")
-    score.add_argument("--no-trim-start", dest="trim_start", action="store_false",
-                       help="keep the empty measures before the first note")
-    score.add_argument("--title", help="score title (default: the filename)")
+    ren.add_argument("--key", default="auto",
+                     help="key for the header, e.g. F, Bb, 'D minor' (default: detected)")
     return p
 
 
@@ -117,21 +106,9 @@ def main(argv=None) -> int:
                                    octave_shift=args.octave_shift,
                                    flats=not args.sharps,
                                    harmonic_filter=args.harmonic_filter)
-        print("[tempo] beat-tracking the mix, then fitting to the detected notes")
-        tempo_info = tempo.estimate(source, [n.onset_s for n in notes], grid=args.grid)
-        confidence = tempo_info.get("confidence")
-        print(f"[tempo] {tempo_info['bpm']} bpm "
-              f"({tempo_info['source']}, fit {confidence})")
-        if args.bpm:
-            print(f"[tempo] overridden by --bpm {args.bpm}; the score will use that")
-        elif confidence is not None and confidence < 0.85:
-            print(f"[tempo] LOW CONFIDENCE ({confidence}). The rhythm in the score is "
-                  f"probably wrong -- pass --bpm if you know the tempo.")
-
         doc = NoteDocument(
             source=str(source),
             notes=notes,
-            tempo=tempo_info,
             params={k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()
                     if k not in {"out", "from_notes"}},
             generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -139,35 +116,17 @@ def main(argv=None) -> int:
         doc.to_json(work / NOTES_JSON)
         midi_out.write_melody(doc.notes, work / MELODY_MIDI)
 
-    if doc.tempo is None:
-        # A v1 document, or one rendered without audio: fit a grid to the onsets.
-        doc.tempo = tempo.estimate_from_onsets([n.onset_s for n in doc.notes])
-        print(f"[tempo] no stored tempo; estimated {doc.tempo['bpm']} bpm from onsets")
-
     root.mkdir(parents=True, exist_ok=True)
-    written = []
-    if args.format in ("text", "both"):
-        sheet = render_text.render(doc, phrase_gap=args.phrase_gap,
-                                   max_per_line=args.max_per_line,
-                                   show_octaves=not args.bare_names)
-        path = root / f"{name}.txt"
-        path.write_text(sheet)
-        written.append(path)
-        print()
-        print(sheet)
+    sheet = render_text.render(doc, phrase_gap=args.phrase_gap,
+                               max_per_line=args.max_per_line,
+                               show_octaves=not args.bare_names,
+                               key=args.key)
+    path = root / f"{name}{SHEET_EXT}"
+    path.write_text(sheet)
 
-    if args.format in ("musicxml", "both"):
-        score = render_musicxml.render(doc, bpm=args.bpm, grid=args.grid,
-                                       beats_per_measure=args.beats_per_measure,
-                                       key=args.key, trim_start=args.trim_start,
-                                       title=args.title)
-        path = root / f"{name}.musicxml"
-        path.write_text(score)
-        written.append(path)
-
-    print(f"[done] {len(doc.notes)} notes")
-    for path in written:
-        print(f"       {path}")
+    print()
+    print(sheet)
+    print(f"[done] {len(doc.notes)} notes -> {path}")
     return 0
 
 

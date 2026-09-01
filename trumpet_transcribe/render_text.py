@@ -1,9 +1,10 @@
-"""Stage 1 renderer: a monospace note sheet, no rhythm notation.
+"""The note sheet: aligned note names and fingerings, no rhythm notation.
 
 Reads only the intermediate document. Phrase lines break on silence.
 """
 from __future__ import annotations
 
+from . import keysig, trumpet
 from .intermediate import NoteDocument
 from .trumpet import OUT_OF_RANGE
 
@@ -15,6 +16,15 @@ INDENT = LABEL_WIDTH + 3
 def timestamp(seconds: float) -> str:
     minutes, secs = divmod(int(seconds), 60)
     return f"{minutes}:{secs:02d}"
+
+
+def _aligned_rows(cells: list, label: str = "") -> list:
+    """Two rows sharing one set of column widths -- the whole alignment trick."""
+    widths = [max(len(top), len(bottom)) + GUTTER for top, bottom in cells]
+    prefix = label.rjust(LABEL_WIDTH) + "   " if label else " " * INDENT
+    top_row = prefix + "".join(t.ljust(w) for (t, _), w in zip(cells, widths))
+    bottom_row = " " * INDENT + "".join(b.ljust(w) for (_, b), w in zip(cells, widths))
+    return [top_row.rstrip(), bottom_row.rstrip()]
 
 
 def split_phrases(notes: list, phrase_gap: float, max_per_line: int) -> list:
@@ -33,22 +43,57 @@ def split_phrases(notes: list, phrase_gap: float, max_per_line: int) -> list:
     return lines
 
 
+def _key_header(doc: NoteDocument, key: str, show_octaves: bool) -> list:
+    key_info = keysig.estimate(doc.notes) if key == "auto" else keysig.from_name(key)
+
+    # The sheet is in written pitch, so name the written key first; the concert
+    # key is what everyone else in the room is calling it.
+    concert_pc = (key_info["tonic_pc"] - trumpet.TRANSPOSE) % 12
+    names = keysig.SHARP_NAMES if key_info["use_sharps"] else keysig.NAMES
+    concert = f"{names[concert_pc]} {key_info['mode']}"
+
+    line = f"KEY    {key_info['tonic']} {key_info['mode']} written   ({concert} concert)"
+    margin = key_info.get("margin")
+    if margin is not None and margin < 0.05:
+        line += f"   -- close call, could be {key_info['runner_up']}"
+    out = [line, ""]
+
+    cells = []
+    for pitch in keysig.scale_pitches(key_info):
+        name = trumpet.note_name(pitch, flats=not key_info["use_sharps"])
+        if not show_octaves:
+            name = name.rstrip("0123456789")
+        cells.append((name, trumpet.fingering(pitch)))
+    if cells:
+        out += ["       the scale, to jam on:"] + _aligned_rows(cells) + [""]
+
+    played = keysig.detected_pitch_classes(key_info)
+    if played:
+        summary = "  ".join(f"{n} {int(round(w * 100))}%" for n, w in played)
+        out += ["       notes actually detected, most-played first:",
+                " " * INDENT + summary, ""]
+    return out
+
+
 def render(
     doc: NoteDocument,
     phrase_gap: float = 1.0,
     max_per_line: int = 12,
     show_octaves: bool = True,
+    key: str = "auto",
 ) -> str:
-    lines = split_phrases(doc.notes, phrase_gap, max_per_line)
     out = [
         f"# {doc.source}",
-        f"# written Bb trumpet pitch (concert +2), first-choice fingerings",
-        f"# phrase break at gaps > {phrase_gap}s   |   {OUT_OF_RANGE} = outside practical range",
+        "# Written Bb trumpet pitch (concert +2). First-choice fingerings.",
+        f"# Phrase break at gaps > {phrase_gap}s.   {OUT_OF_RANGE} = outside practical range.",
         "",
     ]
+    if doc.notes:
+        out += _key_header(doc, key, show_octaves)
+        out += ["-" * 72, ""]
 
     flagged = 0
-    for phrase in lines:
+    for phrase in split_phrases(doc.notes, phrase_gap, max_per_line):
         cells = []
         for note in phrase:
             name = note.written_name if show_octaves else note.written_name.rstrip("0123456789")
@@ -56,14 +101,7 @@ def render(
                 name += "*"
                 flagged += 1
             cells.append((name, note.fingering))
-
-        widths = [max(len(n), len(f)) + GUTTER for n, f in cells]
-        label = timestamp(phrase[0].onset_s).rjust(LABEL_WIDTH) + "   "
-        name_row = label + "".join(n.ljust(w) for (n, _), w in zip(cells, widths))
-        fing_row = " " * INDENT + "".join(f.ljust(w) for (_, f), w in zip(cells, widths))
-        out.append(name_row.rstrip())
-        out.append(fing_row.rstrip())
-        out.append("")
+        out += _aligned_rows(cells, label=timestamp(phrase[0].onset_s)) + [""]
 
     if flagged:
         out.append(f"# {flagged} note(s) marked * fall outside F#3-C6 written and have no fingering.")
