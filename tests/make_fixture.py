@@ -23,7 +23,7 @@ def tone(midi, dur, sr=SR):
 def main(out="tests/fixture.wav"):
     parts, expected = [], []
     cursor = 0.0
-    for group, gap_after in [(MELODY, 1.6), (PHRASE_TWO, 0.0)]:
+    for group, gap_after in [(MELODY, 1.5), (PHRASE_TWO, 0.0)]:
         for midi in group:
             expected.append((round(cursor, 2), midi))
             parts.append(tone(midi, 0.5))

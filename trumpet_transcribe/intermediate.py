@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 @dataclass
@@ -40,6 +40,9 @@ class NoteDocument:
     source: str
     notes: list
     params: dict = field(default_factory=dict)
+    # Detected tempo, so stage 2 can quantize without being handed a BPM and
+    # without reaching back into the audio. None on v1 documents.
+    tempo: dict = None
     schema_version: int = SCHEMA_VERSION
     generated_at: str = ""
 
@@ -49,6 +52,7 @@ class NoteDocument:
             "source": self.source,
             "generated_at": self.generated_at or datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "params": self.params,
+            "tempo": self.tempo,
             "notes": [asdict(n) for n in self.notes],
         }
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -58,14 +62,16 @@ class NoteDocument:
     def from_json(cls, path: Path) -> "NoteDocument":
         payload = json.loads(Path(path).read_text())
         version = payload.get("schema_version")
-        if version != SCHEMA_VERSION:
+        if version > SCHEMA_VERSION:
             raise ValueError(
-                f"{path} is schema version {version}, this build expects {SCHEMA_VERSION}"
+                f"{path} is schema version {version}, this build only reads up to "
+                f"{SCHEMA_VERSION}"
             )
         return cls(
             source=payload["source"],
             notes=[Note(**n) for n in payload["notes"]],
             params=payload.get("params", {}),
+            tempo=payload.get("tempo"),
             schema_version=version,
             generated_at=payload.get("generated_at", ""),
         )
