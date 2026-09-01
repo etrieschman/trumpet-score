@@ -86,6 +86,7 @@ def render(
         f"# {doc.source}",
         "# Written Bb trumpet pitch (concert +2). First-choice fingerings.",
         f"# Phrase break at gaps > {phrase_gap}s.   {OUT_OF_RANGE} = outside practical range.",
+        f"# Settings: {doc.params.get('settings') or 'defaults'}",
         "",
     ]
     if doc.notes:

@@ -29,6 +29,34 @@ MELODY_MIDI = "melody.mid"
 SHEET_EXT = ".txt"
 
 
+# Flags whose stored value is False when the flag is present.
+NEGATED_FLAGS = {"harmonic_filter": "--no-harmonic-filter"}
+# Not worth recording: they say where things went, not what was produced.
+UNRECORDED = {"out", "from_notes", "audio", "force_separate", "force_detect",
+              "model", "device"}
+
+
+def settings_used(args) -> str:
+    """The non-default flags for this run, paste-ready.
+
+    Written into the sheet so a sheet always says how to reproduce itself --
+    otherwise a later run with different settings silently replaces a result
+    you liked, and nothing records what the good one was.
+    """
+    defaults = vars(build_parser().parse_args([]))
+    flags = []
+    for key, value in sorted(vars(args).items()):
+        if key in UNRECORDED or value == defaults[key]:
+            continue
+        if isinstance(value, bool):
+            flags.append(NEGATED_FLAGS.get(key, f"--{key.replace('_', '-')}"))
+        else:
+            text = str(value)
+            flags.append(f"--{key.replace('_', '-')} "
+                         f"{text if ' ' not in text else repr(text)}")
+    return " ".join(flags)
+
+
 def parse_time(value: str) -> float:
     """Accept either mm:ss or plain seconds."""
     if ":" in value:
@@ -123,7 +151,7 @@ def main(argv=None) -> int:
             source=str(source),
             notes=notes,
             params={k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()
-                    if k not in {"out", "from_notes"}},
+                    if k not in {"out", "from_notes"}} | {"settings": settings_used(args)},
             generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         )
         doc.to_json(work / NOTES_JSON)
