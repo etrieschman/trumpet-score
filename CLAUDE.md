@@ -80,6 +80,14 @@ Measured, not guessed:
 Rule of thumb: if raw detections rise sharply and the final count does not,
 stop turning threshold knobs.
 
+## Picking a stem
+
+The default `other` stem is right for horns, but the useful line is often
+somewhere else. So What's head is the bass; `--stem bass --octave-shift 1`
+puts it in trumpet register and the key detector immediately firms up
+(E 35% / F# 27%, unambiguous E dorian). Always ask which instrument actually
+plays the melody being learned before touching threshold knobs.
+
 ## Other TODO
 
 - Separating a horn from the `other` stem is the real ceiling on quality. A

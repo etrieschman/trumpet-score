@@ -144,7 +144,8 @@ def scale_pitches(key_info: dict, low: int = 54, high: int = 84,
     ]
 
 
-def detected_pitch_classes(key_info: dict, limit: int = 8) -> list:
+def detected_pitch_classes(key_info: dict, limit: int = 8,
+                           use_sharps: bool = None) -> list:
     """Pitch classes actually present, most-played first.
 
     Ground truth from the recording rather than a model fit -- worth showing
@@ -153,6 +154,8 @@ def detected_pitch_classes(key_info: dict, limit: int = 8) -> list:
     histogram = key_info.get("histogram")
     if not histogram:
         return []
-    names = SHARP_NAMES if key_info["use_sharps"] else NAMES
+    if use_sharps is None:
+        use_sharps = key_info["use_sharps"]
+    names = SHARP_NAMES if use_sharps else NAMES
     ordered = sorted(range(12), key=lambda pc: -histogram[pc])
     return [(names[pc], histogram[pc]) for pc in ordered[:limit] if histogram[pc] > 0.02]

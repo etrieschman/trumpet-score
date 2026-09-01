@@ -74,10 +74,15 @@ audio. Re-render from it without redoing any analysis:
 
 ## Flags worth knowing
 
-**Separation** (slow, cached): `--stem` picks which Demucs stem holds the
-melody — `other` by default, which is where horns land. Use `--stem vocals` if
-the melody is sung, `--stem none` to skip separation entirely. `--force-separate`
-busts the cache.
+**Separation** (slow, cached): `--stem` picks which Demucs stem holds the line
+you want — `other` by default, which is where horns land. **The melody you are
+learning is not always in the horn stem**: the head of So What is the bass line,
+so `--stem bass --octave-shift 1` gets it into trumpet register. `--stem vocals`
+if it is sung, `--stem none` to skip separation. `--force-separate` busts the
+cache.
+
+`--name` writes to a different filename, so several takes of one song can
+coexist — one sheet for the head, another for the solo.
 
 **Detection** (cached): `--onset-threshold` / `--frame-threshold` — lower to
 catch more notes and more garbage. `--force-detect` busts the cache.

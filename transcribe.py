@@ -33,7 +33,7 @@ SHEET_EXT = ".txt"
 NEGATED_FLAGS = {"harmonic_filter": "--no-harmonic-filter"}
 # Not worth recording: they say where things went, not what was produced.
 UNRECORDED = {"out", "from_notes", "audio", "force_separate", "force_detect",
-              "model", "device"}
+              "model", "device", "name"}
 
 
 def settings_used(args) -> str:
@@ -70,6 +70,9 @@ def build_parser() -> argparse.ArgumentParser:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     p.add_argument("audio", nargs="?", help="input audio (mp3/m4a/wav/flac)")
+    p.add_argument("--name", metavar="NAME",
+                   help="output filename to use instead of the audio file's, so "
+                        "several takes of one song can coexist")
     p.add_argument("--out", type=Path, default=None, metavar="DIR",
                    help=f"where to write the sheet (default: ./{DEFAULT_ROOT}/)")
 
@@ -124,12 +127,12 @@ def main(argv=None) -> int:
 
     if args.from_notes:
         doc = NoteDocument.from_json(args.from_notes)
-        name = Path(doc.source).stem
+        name = args.name or Path(doc.source).stem
     else:
         if not args.audio:
             build_parser().error("an audio file is required (or use --from-notes)")
         source = Path(args.audio)
-        name = source.stem
+        name = args.name or source.stem
         work = root / CACHE_DIR / name
         work.mkdir(parents=True, exist_ok=True)
 
@@ -161,7 +164,7 @@ def main(argv=None) -> int:
     sheet = render_text.render(doc, phrase_gap=args.phrase_gap,
                                max_per_line=args.max_per_line,
                                show_octaves=not args.bare_names,
-                               key=args.key)
+                               key=args.key, force_sharps=args.sharps)
     path = root / f"{name}{SHEET_EXT}"
     path.write_text(sheet)
 

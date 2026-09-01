@@ -43,13 +43,11 @@ def split_phrases(notes: list, phrase_gap: float, max_per_line: int) -> list:
     return lines
 
 
-def _key_header(doc: NoteDocument, key: str, show_octaves: bool) -> list:
-    key_info = keysig.estimate(doc.notes) if key == "auto" else keysig.from_name(key)
-
+def _key_header(key_info: dict, use_sharps: bool, show_octaves: bool) -> list:
     # The sheet is in written pitch, so name the written key first; the concert
     # key is what everyone else in the room is calling it.
     concert_pc = (key_info["tonic_pc"] - trumpet.TRANSPOSE) % 12
-    names = keysig.SHARP_NAMES if key_info["use_sharps"] else keysig.NAMES
+    names = keysig.SHARP_NAMES if use_sharps else keysig.NAMES
     concert = f"{names[concert_pc]} {key_info['mode']}"
 
     line = f"KEY    {key_info['tonic']} {key_info['mode']} written   ({concert} concert)"
@@ -60,14 +58,14 @@ def _key_header(doc: NoteDocument, key: str, show_octaves: bool) -> list:
 
     cells = []
     for pitch in keysig.scale_pitches(key_info):
-        name = trumpet.note_name(pitch, flats=not key_info["use_sharps"])
+        name = trumpet.note_name(pitch, flats=not use_sharps)
         if not show_octaves:
             name = name.rstrip("0123456789")
         cells.append((name, trumpet.fingering(pitch)))
     if cells:
         out += ["       the scale, to jam on:"] + _aligned_rows(cells) + [""]
 
-    played = keysig.detected_pitch_classes(key_info)
+    played = keysig.detected_pitch_classes(key_info, use_sharps=use_sharps)
     if played:
         summary = "  ".join(f"{n} {int(round(w * 100))}%" for n, w in played)
         out += ["       notes actually detected, most-played first:",
@@ -81,6 +79,7 @@ def render(
     max_per_line: int = 12,
     show_octaves: bool = True,
     key: str = "auto",
+    force_sharps: bool = False,
 ) -> str:
     out = [
         f"# {doc.source}",
@@ -89,15 +88,22 @@ def render(
         f"# Settings: {doc.params.get('settings') or 'defaults'}",
         "",
     ]
+    use_sharps = False
     if doc.notes:
-        out += _key_header(doc, key, show_octaves)
+        key_info = keysig.estimate(doc.notes) if key == "auto" else keysig.from_name(key)
+        # Spell accidentals to match the key, so the phrase rows agree with the
+        # scale above them -- F# in a sharp key, never Gb.
+        use_sharps = force_sharps or key_info["use_sharps"]
+        out += _key_header(key_info, use_sharps, show_octaves)
         out += ["-" * 72, ""]
 
     flagged = 0
     for phrase in split_phrases(doc.notes, phrase_gap, max_per_line):
         cells = []
         for note in phrase:
-            name = note.written_name if show_octaves else note.written_name.rstrip("0123456789")
+            name = trumpet.note_name(note.written_midi, flats=not use_sharps)
+            if not show_octaves:
+                name = name.rstrip("0123456789")
             if not note.in_range:
                 name += "*"
                 flagged += 1
