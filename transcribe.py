@@ -119,8 +119,14 @@ def main(argv=None) -> int:
                                    harmonic_filter=args.harmonic_filter)
         print("[tempo] beat-tracking the mix, then fitting to the detected notes")
         tempo_info = tempo.estimate(source, [n.onset_s for n in notes], grid=args.grid)
+        confidence = tempo_info.get("confidence")
         print(f"[tempo] {tempo_info['bpm']} bpm "
-              f"({tempo_info['source']}, fit {tempo_info.get('confidence')})")
+              f"({tempo_info['source']}, fit {confidence})")
+        if args.bpm:
+            print(f"[tempo] overridden by --bpm {args.bpm}; the score will use that")
+        elif confidence is not None and confidence < 0.85:
+            print(f"[tempo] LOW CONFIDENCE ({confidence}). The rhythm in the score is "
+                  f"probably wrong -- pass --bpm if you know the tempo.")
 
         doc = NoteDocument(
             source=str(source),
