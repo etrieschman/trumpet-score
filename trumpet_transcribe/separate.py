@@ -1,8 +1,7 @@
-"""Source separation (Demucs), with an on-disk cache.
+"""Source separation (Demucs).
 
-Separation is by far the slowest step, so the resulting stem is cached in
-<out>/stems/ and reused unless the input file or the model choice changes.
-Filter re-runs never touch this module.
+The slowest step, so the stem is cached and reused unless the input file or
+model choice changes.
 """
 from __future__ import annotations
 
@@ -15,9 +14,8 @@ from .audio import load, write_wav
 
 DEFAULT_MODEL = "htdemucs_6s"
 
-# htdemucs_6s stems: drums, bass, other, vocals, guitar, piano.
-# A trumpet lands in "other" -- the 6-stem model is worth the extra time because
-# it pulls guitar and piano out of "other", leaving the horn much less buried.
+# htdemucs_6s stems: drums, bass, other, vocals, guitar, piano. Horns land in
+# "other"; the 6-stem model pulls guitar and piano out of it.
 DEFAULT_STEM = "other"
 
 
@@ -87,11 +85,8 @@ def separate(
     tensor = (tensor - ref.mean()) / (ref.std() + 1e-8)
 
     print(f"[separate] running Demucs on {dev} ({wav.shape[1] / sr:.0f}s of audio)")
-    # shifts=0 is essential, not a tuning choice. Demucs defaults to shifts=1,
-    # which applies a RANDOM time shift to the input -- with a single shift
-    # there is nothing to average, so it only randomizes. That made separation
-    # unreproducible: identical input and settings produced different stems on
-    # every run, on both MPS and CPU, silently changing the transcription.
+    # shifts=0 keeps runs reproducible; Demucs otherwise applies a random
+    # time shift with nothing to average it against.
     torch.manual_seed(0)
     try:
         sources = apply_model(model, tensor[None], device=dev, progress=True,

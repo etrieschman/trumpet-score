@@ -1,8 +1,7 @@
-"""Polyphonic note detection (Spotify basic-pitch), with an on-disk cache.
+"""Polyphonic note detection (basic-pitch), cached on disk.
 
-basic-pitch emits note events rather than a raw f0 curve, which maps directly
-onto the intermediate document. It is polyphonic, so melody reduction happens
-downstream in melody.py.
+Emits note events rather than an f0 curve. Polyphonic, so melody reduction
+happens downstream in melody.py.
 """
 from __future__ import annotations
 
@@ -14,11 +13,7 @@ RAW_MIDI = "raw.mid"
 
 
 def _model_path():
-    """Prefer the ONNX weights.
-
-    basic-pitch picks CoreML first on macOS, which drags in coremltools and
-    warns about untested torch versions. ONNX is the stable choice here.
-    """
+    """Prefer the ONNX weights; basic-pitch picks CoreML first on macOS."""
     from basic_pitch import ICASSP_2022_MODEL_PATH
 
     onnx = Path(ICASSP_2022_MODEL_PATH).parent / "nmp.onnx"

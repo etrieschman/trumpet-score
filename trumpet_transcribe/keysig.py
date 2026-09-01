@@ -1,8 +1,8 @@
-"""Key estimation, so accidentals are spelled sensibly with no user input.
+"""Key estimation.
 
 Krumhansl-Schmuckler: correlate a duration-weighted pitch-class histogram
-against major and minor profiles, take the best of the 24 keys. Used only to
-choose a key signature and a sharp/flat preference -- it never changes a pitch.
+against a profile per candidate key, take the best fit. Chooses a key signature
+and a sharp/flat preference; it never changes a pitch.
 """
 from __future__ import annotations
 
@@ -28,12 +28,9 @@ MINOR_PROFILE = np.array(
 def _modal_profile(mode: str) -> np.ndarray:
     """Build a profile for a mode from the major profile's degree weights.
 
-    Krumhansl only measured major and minor, but the ordered scale-degree
-    weights (tonic strongest, then fifth, then third...) carry over: place the
-    same functional weights on the mode's own degrees and fill the chromatic
-    positions with the major profile's average non-scale weight. Needed because
-    modal tunes are exactly what this tool gets pointed at -- So What is dorian,
-    and a major/minor-only fit mislabels it.
+    Krumhansl measured only major and minor. The ordered scale-degree weights
+    (tonic strongest, then fifth, then third) carry over: place them on the
+    mode's degrees, fill chromatic positions with the average non-scale weight.
     """
     major_degrees = DEGREES["major"]
     degree_weights = [MAJOR_PROFILE[d] for d in major_degrees]
@@ -60,10 +57,10 @@ SHARP_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 
 
 def estimate(notes) -> dict:
-    """Return {'fifths', 'tonic', 'mode', 'use_sharps'} for a list of Notes.
+    """Estimate the key of a list of Notes.
 
-    Weighting by duration matters: a passing sixteenth should not count as much
-    as a held whole note when deciding what key we are in.
+    Duration-weighted, so a passing sixteenth counts for less than a held
+    whole note.
     """
     histogram = np.zeros(12)
     for note in notes:
@@ -148,8 +145,8 @@ def detected_pitch_classes(key_info: dict, limit: int = 8,
                            use_sharps: bool = None) -> list:
     """Pitch classes actually present, most-played first.
 
-    Ground truth from the recording rather than a model fit -- worth showing
-    next to the key, because the major/minor profiles mislabel modal tunes.
+    Measured from the recording rather than fitted, so it stands when the key
+    label is wrong.
     """
     histogram = key_info.get("histogram")
     if not histogram:

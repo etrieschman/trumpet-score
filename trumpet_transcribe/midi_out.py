@@ -1,5 +1,5 @@
-"""MIDI byproducts. raw.mid comes straight from detection; this writes the
-cleaned melody line at concert pitch, so it plays along with the recording."""
+"""MIDI byproducts. Writes the filtered melody at concert pitch, so it plays
+along with the recording; raw.mid comes straight from detection."""
 from __future__ import annotations
 
 from pathlib import Path

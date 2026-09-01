@@ -1,8 +1,7 @@
-"""The intermediate note document that every renderer reads.
+"""The intermediate note document every renderer reads.
 
-This is the contract between detection and rendering. Stage 1 renders it as a
-text note sheet; stage 2 will render the same document as MusicXML. Renderers
-must not reach back into the audio or detection layers.
+The contract between analysis and rendering: renderers read this and never
+reach back into the audio or detection layers.
 """
 from __future__ import annotations
 
@@ -26,8 +25,7 @@ class Note:
     fingering: str
     in_range: bool
     velocity: float = 0.0
-    # Not used by the stage 1 text renderer, which deliberately omits rhythm,
-    # but carried so stage 2 can quantize without re-running detection.
+    # Carried for renderers that need rhythm; the text sheet omits it.
     alternates: list = field(default_factory=list)
 
     @property

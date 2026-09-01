@@ -18,10 +18,8 @@ from trumpet_transcribe.detect import detect
 from trumpet_transcribe.intermediate import NoteDocument
 from trumpet_transcribe.separate import DEFAULT_MODEL, DEFAULT_STEM, separate
 
-# Deliverables land in the scores directory, one file per song. Everything
-# else -- stems, raw detections, the intermediate, MIDI -- is working state and
-# lives in a hidden cache beside them, so the folder you actually open stays
-# readable.
+# One sheet per song in the scores directory; working state goes in a hidden
+# cache beside it.
 DEFAULT_ROOT = Path("scores")
 CACHE_DIR = ".cache"
 NOTES_JSON = "notes.json"
@@ -37,12 +35,7 @@ UNRECORDED = {"out", "from_notes", "audio", "force_separate", "force_detect",
 
 
 def settings_used(args) -> str:
-    """The non-default flags for this run, paste-ready.
-
-    Written into the sheet so a sheet always says how to reproduce itself --
-    otherwise a later run with different settings silently replaces a result
-    you liked, and nothing records what the good one was.
-    """
+    """The non-default flags for this run, so a sheet says how to reproduce itself."""
     defaults = vars(build_parser().parse_args([]))
     flags = []
     for key, value in sorted(vars(args).items()):

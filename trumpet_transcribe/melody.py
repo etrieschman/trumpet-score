@@ -1,8 +1,8 @@
 """Turn raw polyphonic detections into one clean monophonic melody line.
 
-Order matters here: range filter -> monophonic reduction -> segment -> drop
-blips -> merge held notes. Reduction happens before the length filter so that a
-short fragment of an inner voice cannot survive by being the only thing present.
+Order matters: range filter -> reduce to one voice -> segment -> drop blips ->
+merge held notes. Reduction precedes the length filter so a short fragment of an
+inner voice cannot survive by being the only thing sounding.
 """
 from __future__ import annotations
 
@@ -26,10 +26,8 @@ def suppress_harmonics(
 ) -> list:
     """Drop detections that look like overtones of a louder, lower note.
 
-    Brass has a violently strong overtone series and basic-pitch happily reports
-    the partials as their own notes. Without this, a sustained note arrives as
-    the octave (while the partial is detected) followed by the fundamental,
-    which both doubles the note count and gets the octave wrong.
+    Brass overtones are strong enough that the detector reports partials as
+    notes in their own right.
     """
     keep = []
     for i, (start_s, end_s, pitch, amp) in enumerate(events):
@@ -92,10 +90,8 @@ def reduce_to_melody(events: list, rule: str = "top", hop: float = HOP) -> list:
 def merge_repeats(events: list, merge_gap: float) -> list:
     """Join consecutive same-pitch events separated by less than merge_gap.
 
-    A held note frequently arrives as several detections. The cost is that two
-    genuinely rearticulated notes at the same pitch, tongued fast, merge into
-    one -- unavoidable without onset strength, and cheap when rhythm is coming
-    from the ear anyway.
+    Held notes arrive as several detections. The cost is that fast rearticulated
+    notes at one pitch merge into one; not separable from pitch alone.
     """
     merged = []
     for ev in sorted(events, key=lambda e: e[0]):
@@ -126,15 +122,10 @@ def build_notes(
     deliberately wider than the trumpet's range so that near-misses survive to
     be flagged rather than silently dropped.
 
-    start_s/end_s restrict the window before anything else runs, clipping notes
-    that straddle a boundary rather than dropping them. Timestamps stay absolute
-    so they still line up with the recording.
+    start_s/end_s clip to a time window; timestamps stay absolute.
     """
-    # Keep anything that SOUNDS inside the window, not just anything that
-    # starts in it. Filtering by onset drops a note that began before the
-    # window and is still ringing inside it, which changes what the melody
-    # reduction picks and what the harmonic filter suppresses -- so the window
-    # would alter the notes instead of just trimming them.
+    # Keep what sounds inside the window, not just what starts in it, so the
+    # window trims the result rather than changing it.
     windowed = [
         [max(s0, start_s), e0 if end_s is None else min(e0, end_s), p0, a0]
         for s0, e0, p0, a0 in events

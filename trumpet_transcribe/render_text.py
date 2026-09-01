@@ -19,7 +19,7 @@ def timestamp(seconds: float) -> str:
 
 
 def _aligned_rows(cells: list, label: str = "") -> list:
-    """Two rows sharing one set of column widths -- the whole alignment trick."""
+    """Two rows sharing one set of column widths."""
     widths = [max(len(top), len(bottom)) + GUTTER for top, bottom in cells]
     prefix = label.rjust(LABEL_WIDTH) + "   " if label else " " * INDENT
     top_row = prefix + "".join(t.ljust(w) for (t, _), w in zip(cells, widths))
@@ -94,8 +94,8 @@ def render(
     key_info = None
     if doc.notes:
         key_info = keysig.estimate(doc.notes) if key == "auto" else keysig.from_name(key)  # noqa: E501
-        # Spell accidentals to match the key, so the phrase rows agree with the
-        # scale above them -- F# in a sharp key, never Gb.
+        # Spell accidentals to match the key so phrase rows agree with the
+        # scale above them.
         use_sharps = force_sharps or key_info["use_sharps"]
         out += _key_header(key_info, use_sharps, show_octaves)
         out += ["-" * 72, ""]
@@ -115,9 +115,7 @@ def render(
                 name += "*"
                 flagged += 1
             elif scale and note.written_midi % 12 not in scale:
-                # Either a chromatic passing tone or a detection error. Worth
-                # seeing at a glance -- an isolated one in a modal tune is
-                # almost always the latter.
+                # Chromatic passing tone, or a detection error.
                 name += "~"
                 outside += 1
             cells.append((name, note.fingering))
