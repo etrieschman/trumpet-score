@@ -23,7 +23,7 @@ with `afconvert`, which ships with macOS.
 ## Use
 
 ```bash
-.venv/bin/python transcribe.py song.mp3 --out ./output
+.venv/bin/python transcribe.py song.mp3
 ```
 
 First run downloads the Demucs weights (~300 MB) and takes a while. Every run
@@ -33,28 +33,34 @@ Re-run with different filter settings — this touches neither Demucs nor
 basic-pitch and returns in well under a second:
 
 ```bash
-.venv/bin/python transcribe.py song.mp3 --out ./output --min-dur 0.15 --phrase-gap 0.7
-```
-
-Re-render the text only, from an existing intermediate:
-
-```bash
-.venv/bin/python transcribe.py --from-notes ./output/notes.json --out ./output --max-per-line 8
+.venv/bin/python transcribe.py song.mp3 --min-dur 0.15 --phrase-gap 0.7
 ```
 
 ## Output
 
-| File | What it is |
-| --- | --- |
-| `notes.txt` | the note sheet |
-| `notes.json` | the intermediate: onset, duration, concert + written pitch, fingering, in-range flag |
-| `melody.mid` | cleaned melody at concert pitch, plays along with the recording |
-| `raw.mid` | unfiltered detector output, the byproduct |
-| `raw_notes.json` | cached detections (delete to force re-detection) |
-| `stems/` | cached Demucs stem (delete to force re-separation) |
+Two files per song, named after it, in `./scores/`:
 
-`notes.json` is the contract. The text renderer reads only that, and stage 2
-(MusicXML) will read the same file.
+```
+scores/
+  So What.txt              <- the note sheet
+  So What.musicxml         <- the score, opens in MuseScore
+  .cache/
+    So What/               <- working state, safe to delete
+      stems/other.wav      cached separation (the slow step)
+      raw_notes.json       cached detections
+      notes.json           the intermediate
+      raw.mid, melody.mid  MIDI byproducts
+```
+
+`--out DIR` puts the sheet somewhere else. `--format text` writes only the text
+sheet. Deleting `.cache/` costs you nothing but time.
+
+`notes.json` is the contract: both renderers read only that file and never touch
+audio. Re-render from it without redoing any analysis:
+
+```bash
+.venv/bin/python transcribe.py --from-notes "scores/.cache/So What/notes.json" --max-per-line 8
+```
 
 ## Flags worth knowing
 

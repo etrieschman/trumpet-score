@@ -197,7 +197,7 @@ def render(
 
     identification = ET.SubElement(score, "identification")
     encoding = ET.SubElement(identification, "encoding")
-    ET.SubElement(encoding, "software").text = "trumpet-sheets"
+    ET.SubElement(encoding, "software").text = "trumpet-score"
     ET.SubElement(encoding, "encoding-description").text = (
         f"auto-transcribed; tempo {use_bpm:.1f} bpm ({tempo_info.get('source')}), "
         f"key {key_info['tonic']} {key_info['mode']}, grid 1/{grid * 4}"

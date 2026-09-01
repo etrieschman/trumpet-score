@@ -108,7 +108,10 @@ def test_end_to_end_on_fixture():
          "--out", str(out), "--stem", "none"],
         cwd=ROOT, check=True, capture_output=True,
     )
-    doc = NoteDocument.from_json(out / "notes.json")
+    # Deliverables sit in the output root; working state is cached beside them.
+    assert (out / "fixture.txt").exists()
+    assert (out / "fixture.musicxml").exists()
+    doc = NoteDocument.from_json(out / ".cache" / "fixture" / "notes.json")
     expected_concert = [60, 62, 64, 65, 67, 69, 70, 72, 67, 65, 62, 60]
     assert [n.concert_midi for n in doc.notes] == expected_concert
     assert [n.fingering for n in doc.notes[:8]] == \

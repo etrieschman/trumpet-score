@@ -18,10 +18,14 @@ from trumpet_transcribe.detect import detect
 from trumpet_transcribe.intermediate import NoteDocument
 from trumpet_transcribe.separate import DEFAULT_MODEL, DEFAULT_STEM, separate
 
+# Deliverables land in the scores directory, one file per song. Everything
+# else -- stems, raw detections, the intermediate, MIDI -- is working state and
+# lives in a hidden cache beside them, so the folder you actually open stays
+# readable.
+DEFAULT_ROOT = Path("scores")
+CACHE_DIR = ".cache"
 NOTES_JSON = "notes.json"
-NOTES_TXT = "notes.txt"
 MELODY_MIDI = "melody.mid"
-SCORE_XML = "score.musicxml"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -29,7 +33,8 @@ def build_parser() -> argparse.ArgumentParser:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     p.add_argument("audio", nargs="?", help="input audio (mp3/m4a/wav/flac)")
-    p.add_argument("--out", default="./output", type=Path, help="output directory")
+    p.add_argument("--out", type=Path, default=None, metavar="DIR",
+                   help=f"where to write the sheet (default: ./{DEFAULT_ROOT}/)")
 
     sep = p.add_argument_group("separation (slow, cached)")
     sep.add_argument("--stem", default=DEFAULT_STEM,
@@ -86,19 +91,22 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
-    out_dir: Path = args.out
-    out_dir.mkdir(parents=True, exist_ok=True)
+    root: Path = args.out or DEFAULT_ROOT
 
     if args.from_notes:
         doc = NoteDocument.from_json(args.from_notes)
+        name = Path(doc.source).stem
     else:
         if not args.audio:
             build_parser().error("an audio file is required (or use --from-notes)")
         source = Path(args.audio)
+        name = source.stem
+        work = root / CACHE_DIR / name
+        work.mkdir(parents=True, exist_ok=True)
 
-        stem_path = separate(source, out_dir, stem=args.stem, model_name=args.model,
+        stem_path = separate(source, work, stem=args.stem, model_name=args.model,
                              device=args.device, force=args.force_separate)
-        events = detect(stem_path, out_dir,
+        events = detect(stem_path, work,
                         onset_threshold=args.onset_threshold,
                         frame_threshold=args.frame_threshold,
                         min_note_ms=args.min_note_ms,
@@ -122,21 +130,23 @@ def main(argv=None) -> int:
                     if k not in {"out", "from_notes"}},
             generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         )
-        doc.to_json(out_dir / NOTES_JSON)
-        midi_out.write_melody(doc.notes, out_dir / MELODY_MIDI)
+        doc.to_json(work / NOTES_JSON)
+        midi_out.write_melody(doc.notes, work / MELODY_MIDI)
 
     if doc.tempo is None:
         # A v1 document, or one rendered without audio: fit a grid to the onsets.
         doc.tempo = tempo.estimate_from_onsets([n.onset_s for n in doc.notes])
         print(f"[tempo] no stored tempo; estimated {doc.tempo['bpm']} bpm from onsets")
 
+    root.mkdir(parents=True, exist_ok=True)
     written = []
     if args.format in ("text", "both"):
         sheet = render_text.render(doc, phrase_gap=args.phrase_gap,
                                    max_per_line=args.max_per_line,
                                    show_octaves=not args.bare_names)
-        (out_dir / NOTES_TXT).write_text(sheet)
-        written.append(out_dir / NOTES_TXT)
+        path = root / f"{name}.txt"
+        path.write_text(sheet)
+        written.append(path)
         print()
         print(sheet)
 
@@ -145,10 +155,13 @@ def main(argv=None) -> int:
                                        beats_per_measure=args.beats_per_measure,
                                        key=args.key, trim_start=args.trim_start,
                                        title=args.title)
-        (out_dir / SCORE_XML).write_text(score)
-        written.append(out_dir / SCORE_XML)
+        path = root / f"{name}.musicxml"
+        path.write_text(score)
+        written.append(path)
 
-    print(f"[done] {len(doc.notes)} notes -> " + ", ".join(str(p) for p in written))
+    print(f"[done] {len(doc.notes)} notes")
+    for path in written:
+        print(f"       {path}")
     return 0
 
 

@@ -1,4 +1,4 @@
-# trumpet-sheets — working notes
+# trumpet-score — working notes
 
 Turn a recording into a Bb trumpet part: a monospace note sheet (stage 1) and
 quantized MusicXML (stage 2). See README.md for usage.
@@ -22,8 +22,8 @@ choice — nothing else moves.
 
 ```
 audio.py      decode (no ffmpeg; afconvert for m4a)
-separate.py   Demucs htdemucs_6s -> stem wav        [cached in <out>/stems/]
-detect.py     basic-pitch -> raw note events        [cached in raw_notes.json]
+separate.py   Demucs htdemucs_6s -> stem wav        [cached]
+detect.py     basic-pitch -> raw note events        [cached]
 melody.py     harmonic suppression, monophonic reduction, filtering, merging
 tempo.py      beat-track the mix, refine against note onsets
 keysig.py     Krumhansl-Schmuckler key estimate
@@ -32,6 +32,12 @@ intermediate.py    the notes.json schema (v2)
 render_text.py     stage 1 sheet
 render_musicxml.py stage 2 score
 ```
+
+## Output layout
+
+Deliverables only in `scores/<song>.txt` and `scores/<song>.musicxml`. All
+working state (stems, raw detections, notes.json, MIDI) goes in
+`scores/.cache/<song>/` and is safe to delete. `--out DIR` moves the root.
 
 ## TODO
 

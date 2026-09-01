@@ -1,6 +1,7 @@
 .venv/
 output/
 out_*/
+scores/
 __pycache__/
 *.pyc
 tests/fixture.wav
