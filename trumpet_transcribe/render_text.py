@@ -84,8 +84,9 @@ def render(
     out = [
         f"# {doc.source}",
         "# Written Bb trumpet pitch (concert +2). First-choice fingerings.",
-        f"# Phrase break at gaps > {phrase_gap}s.   {OUT_OF_RANGE} = outside practical range.",
-        "# * = unplayable pitch.   ~ = outside the detected key, check these first.",
+        f"# Phrase break at gaps > {phrase_gap}s.",
+        f"# * = unplayable, shown as {OUT_OF_RANGE}.   ~ = outside the detected key,"
+        " check these first.",
         f"# Settings: {doc.params.get('settings') or 'defaults'}",
         "",
     ]
