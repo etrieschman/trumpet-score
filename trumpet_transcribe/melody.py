@@ -126,10 +126,20 @@ def build_notes(
     deliberately wider than the trumpet's range so that near-misses survive to
     be flagged rather than silently dropped.
 
-    start_s/end_s restrict the window before anything else runs. Timestamps stay
-    absolute so they still line up with the recording.
+    start_s/end_s restrict the window before anything else runs, clipping notes
+    that straddle a boundary rather than dropping them. Timestamps stay absolute
+    so they still line up with the recording.
     """
-    windowed = [ev for ev in events if ev[0] >= start_s and (end_s is None or ev[0] < end_s)]
+    # Keep anything that SOUNDS inside the window, not just anything that
+    # starts in it. Filtering by onset drops a note that began before the
+    # window and is still ringing inside it, which changes what the melody
+    # reduction picks and what the harmonic filter suppresses -- so the window
+    # would alter the notes instead of just trimming them.
+    windowed = [
+        [max(s0, start_s), e0 if end_s is None else min(e0, end_s), p0, a0]
+        for s0, e0, p0, a0 in events
+        if e0 > start_s and (end_s is None or s0 < end_s)
+    ]
     shifted = [[s, e, p + 12 * octave_shift, a] for s, e, p, a in windowed]
     in_bounds = [ev for ev in shifted if low <= ev[2] <= high]
     if harmonic_filter:

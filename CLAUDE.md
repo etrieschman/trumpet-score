@@ -80,13 +80,24 @@ Measured, not guessed:
 Rule of thumb: if raw detections rise sharply and the final count does not,
 stop turning threshold knobs.
 
+## --start/--end are not a clean slice
+
+Windowing clips events that straddle a boundary rather than dropping them, so a
+windowed run now matches the corresponding slice of a full run for most of its
+length. It is still not guaranteed identical: melody reduction picks a winner
+per frame from whatever events compete, so removing events changes outcomes in
+dense passages. Measured on So What (`--start 1:30`): identical for the first 24
+notes, diverging over the last ten seconds.
+
+**When a full-track sheet is known good, scroll it rather than re-cutting it.**
+
 ## Picking a stem
 
-The default `other` stem is right for horns, but the useful line is often
-somewhere else. So What's head is the bass; `--stem bass --octave-shift 1`
-puts it in trumpet register and the key detector immediately firms up
-(E 35% / F# 27%, unambiguous E dorian). Always ask which instrument actually
-plays the melody being learned before touching threshold knobs.
+The default `other` stem is right for horns and is what has worked on So What:
+the trumpet enters around 1:30 and the full-track sheet at default settings is
+the version that proved playable. `--stem bass` was tried on a hunch that the
+head was the bass line; it was wrong. Do not re-theorise the arrangement —
+ask which sheet worked.
 
 ## Other TODO
 
