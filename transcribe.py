@@ -29,6 +29,14 @@ MELODY_MIDI = "melody.mid"
 SHEET_EXT = ".txt"
 
 
+def parse_time(value: str) -> float:
+    """Accept either mm:ss or plain seconds."""
+    if ":" in value:
+        minutes, _, seconds = value.partition(":")
+        return int(minutes) * 60 + float(seconds)
+    return float(value)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -52,6 +60,10 @@ def build_parser() -> argparse.ArgumentParser:
     det.add_argument("--force-detect", action="store_true", help="ignore cached detections")
 
     filt = p.add_argument_group("filtering (fast, re-run freely)")
+    filt.add_argument("--start", type=parse_time, default=0.0, metavar="TIME",
+                      help="ignore everything before this point (mm:ss or seconds)")
+    filt.add_argument("--end", type=parse_time, default=None, metavar="TIME",
+                      help="ignore everything after this point (mm:ss or seconds)")
     filt.add_argument("--melody-rule", default="top", choices=["top", "loudest"])
     filt.add_argument("--min-dur", type=float, default=0.08,
                       help="drop notes shorter than this many seconds")
@@ -105,7 +117,8 @@ def main(argv=None) -> int:
                                    merge_gap=args.merge_gap,
                                    octave_shift=args.octave_shift,
                                    flats=not args.sharps,
-                                   harmonic_filter=args.harmonic_filter)
+                                   harmonic_filter=args.harmonic_filter,
+                                   start_s=args.start, end_s=args.end)
         doc = NoteDocument(
             source=str(source),
             notes=notes,

@@ -117,14 +117,20 @@ def build_notes(
     octave_shift: int = 0,
     flats: bool = True,
     harmonic_filter: bool = True,
+    start_s: float = 0.0,
+    end_s: float = None,
 ) -> list:
     """Raw detections -> filtered, transposed, fingered Note objects.
 
     low/high are concert MIDI bounds for discarding obvious garbage; they are
     deliberately wider than the trumpet's range so that near-misses survive to
     be flagged rather than silently dropped.
+
+    start_s/end_s restrict the window before anything else runs. Timestamps stay
+    absolute so they still line up with the recording.
     """
-    shifted = [[s, e, p + 12 * octave_shift, a] for s, e, p, a in events]
+    windowed = [ev for ev in events if ev[0] >= start_s and (end_s is None or ev[0] < end_s)]
+    shifted = [[s, e, p + 12 * octave_shift, a] for s, e, p, a in windowed]
     in_bounds = [ev for ev in shifted if low <= ev[2] <= high]
     if harmonic_filter:
         in_bounds = suppress_harmonics(in_bounds)

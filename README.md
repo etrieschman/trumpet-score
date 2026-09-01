@@ -84,6 +84,9 @@ catch more notes and more garbage. `--force-detect` busts the cache.
 
 **Filtering** (fast, re-run freely):
 
+- `--start` / `--end` restrict analysis to a window, in `mm:ss` or seconds — the
+  fix when the melody instrument only plays part of the track. Timestamps stay
+  absolute so they still line up with the recording
 - `--min-dur` drops notes shorter than N seconds (default 0.08) — raise it to kill blips
 - `--merge-gap` joins same-pitch notes separated by less than N seconds (default 0.06)
 - `--melody-rule top|loudest` — `top` keeps the highest voice, `loudest` the strongest
@@ -94,6 +97,24 @@ catch more notes and more garbage. `--force-detect` busts the cache.
 **Rendering**: `--phrase-gap` (silence that starts a new line, default 1.0s),
 `--max-per-line`, `--bare-names` (print `G` not `G4`), `--sharps`,
 `--key` (override the detected key, e.g. `--key "D dorian"`).
+
+## Tuning
+
+The defaults are tuned for precision. Loosening them captures more fast notes
+and more junk; on a clean recording that trade is often worth it, on a phone
+recording it usually is not. Check the raw-vs-final counts the run prints: if
+raw detections double and the final count barely moves, the bottleneck is
+separation, not sensitivity, and no threshold will fix it.
+
+```bash
+# more notes, more junk
+--onset-threshold 0.3 --frame-threshold 0.2 --min-note-ms 30 --min-dur 0.04 --merge-gap 0.03
+```
+
+`--merge-gap` is the one that matters most for fast playing: it fuses same-pitch
+notes closer together than its value, so repeated notes at speed vanish into
+one. `--low` cuts a register you know the melody never enters, which is the
+cheapest way to drop accompaniment bleed.
 
 ## The key header
 

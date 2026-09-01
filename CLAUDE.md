@@ -65,7 +65,26 @@ rather than rewrite. What was there and what it needs:
    align to its own undotted base) was the part that worked well — it notates
    syncopation as tied pieces correctly. Keep it.
 
+## What the tuning knobs actually buy
+
+Measured, not guessed:
+
+- Agua Fria (phone recording, dense mix): defaults 168 raw -> 70 notes. Loose
+  settings 536 raw -> 105 notes. The extra 35 are mostly junk; defaults read
+  better.
+- So What solo (`--start 1:30 --low 58`): defaults 163 raw -> 31 notes. Loose
+  settings 391 raw -> 35 notes. **Tripling raw detections bought 4 notes**,
+  which says the bottleneck is separation quality, not detection sensitivity.
+  The `other` stem still holds piano and sax alongside the trumpet.
+
+Rule of thumb: if raw detections rise sharply and the final count does not,
+stop turning threshold knobs.
+
 ## Other TODO
+
+- Separating a horn from the `other` stem is the real ceiling on quality. A
+  horn-specific separator, or a melody-salience model like MELODIA / deep
+  salience, would help more than any further filter tuning.
 
 - Key detection assumes one key for the whole recording. So What's bridge
   modulates up a semitone and gets folded into one label.
