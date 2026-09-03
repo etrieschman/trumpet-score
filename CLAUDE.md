@@ -77,8 +77,25 @@ Measured, not guessed:
   which says the bottleneck is separation quality, not detection sensitivity.
   The `other` stem still holds piano and sax alongside the trumpet.
 
-Rule of thumb: if raw detections rise sharply and the final count does not,
-stop turning threshold knobs.
+These counts predate the determinism fix and will not reproduce exactly. The
+rule they suggested — "if raw detections rise and the final count does not, the
+bottleneck is separation" — proved WRONG on So What; see "Judge results against
+ground truth" below.
+
+## Ensembling: measured, mostly useless here
+
+`--shifts N` restores Demucs's shift trick (N random time offsets, averaged).
+It must stay seeded via `random.seed` — Demucs uses Python's `random`, not
+torch, so `torch.manual_seed` alone does not make it reproducible.
+
+Measured on Agua Fria: shifts 1 -> 4 -> 8 gave 72 -> 71 -> 72 notes. Same model
+at 1 vs 8 shifts agrees on 71/72 notes, so there is no variance to average away.
+Two *different* models (htdemucs_6s vs htdemucs) agree on only 57/72.
+
+So error here is bias, not variance. Ensembling across shifts cannot help;
+ensembling across diverse models plausibly could, and is unbuilt. Consensus
+between two models would mark low-confidence notes the way `~` marks
+out-of-key ones, at double the separation cost.
 
 ## --start/--end are not a clean slice
 

@@ -6,6 +6,7 @@ model choice changes.
 from __future__ import annotations
 
 import json
+import random
 from pathlib import Path
 
 import numpy as np
@@ -19,7 +20,7 @@ DEFAULT_MODEL = "htdemucs_6s"
 DEFAULT_STEM = "other"
 
 
-def _cache_key(source: Path, model_name: str, stem: str) -> dict:
+def _cache_key(source: Path, model_name: str, stem: str, shifts: int) -> dict:
     st = source.stat()
     return {
         "source": str(source.resolve()),
@@ -27,6 +28,7 @@ def _cache_key(source: Path, model_name: str, stem: str) -> dict:
         "mtime": int(st.st_mtime),
         "model": model_name,
         "stem": stem,
+        "shifts": shifts,
     }
 
 
@@ -46,13 +48,14 @@ def separate(
     stem: str = DEFAULT_STEM,
     model_name: str = DEFAULT_MODEL,
     device: str = "auto",
+    shifts: int = 1,
     force: bool = False,
 ) -> Path:
     """Return a path to the isolated stem wav, separating only if needed."""
     stems_dir = out_dir / "stems"
     stem_path = stems_dir / f"{stem}.wav"
     cache_path = stems_dir / "cache.json"
-    key = _cache_key(source, model_name, stem)
+    key = _cache_key(source, model_name, stem, shifts)
 
     if not force and stem_path.exists() and cache_path.exists():
         try:
@@ -84,19 +87,23 @@ def separate(
     ref = tensor.mean(0)
     tensor = (tensor - ref.mean()) / (ref.std() + 1e-8)
 
-    print(f"[separate] running Demucs on {dev} ({wav.shape[1] / sr:.0f}s of audio)")
-    # shifts=0 keeps runs reproducible; Demucs otherwise applies a random
-    # time shift with nothing to average it against.
+    print(f"[separate] running Demucs on {dev} ({wav.shape[1] / sr:.0f}s of audio, "
+          f"{shifts} shift{'s' if shifts != 1 else ''})")
+    # Demucs's shift trick: run the model on `shifts` random time offsets and
+    # average. Averaging suppresses the part of the model's error that moves
+    # with the offset. Demucs seeds from Python's `random`, not torch, so both
+    # need pinning to keep runs reproducible.
+    random.seed(0)
     torch.manual_seed(0)
     try:
         sources = apply_model(model, tensor[None], device=dev, progress=True,
-                              split=True, shifts=0)[0]
+                              split=True, shifts=shifts)[0]
     except Exception as exc:  # MPS backends still hit unimplemented ops
         if dev == "cpu":
             raise
         print(f"[separate] {dev} failed ({exc.__class__.__name__}), retrying on cpu")
         sources = apply_model(model, tensor[None], device="cpu", progress=True,
-                              split=True, shifts=0)[0]
+                              split=True, shifts=shifts)[0]
 
     sources = sources * ref.std() + ref.mean()
     picked = sources[model.sources.index(stem)].cpu().numpy().astype(np.float32)

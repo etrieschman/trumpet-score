@@ -75,6 +75,9 @@ def build_parser() -> argparse.ArgumentParser:
                      help="which Demucs stem holds the melody (default: other)")
     sep.add_argument("--model", default=DEFAULT_MODEL, help="Demucs model name")
     sep.add_argument("--device", default="auto", choices=["auto", "cpu", "mps", "cuda"])
+    sep.add_argument("--shifts", type=int, default=1, metavar="N",
+                     help="average N randomly time-shifted separation passes; "
+                          "higher is cleaner and N times slower (default 1)")
     sep.add_argument("--force-separate", action="store_true", help="ignore cached stem")
 
     det = p.add_argument_group("detection (cached)")
@@ -130,7 +133,8 @@ def main(argv=None) -> int:
         work.mkdir(parents=True, exist_ok=True)
 
         stem_path = separate(source, work, stem=args.stem, model_name=args.model,
-                             device=args.device, force=args.force_separate)
+                             device=args.device, shifts=args.shifts,
+                             force=args.force_separate)
         events = detect(stem_path, work,
                         onset_threshold=args.onset_threshold,
                         frame_threshold=args.frame_threshold,

@@ -77,7 +77,9 @@ only that and never touches audio:
 (default) holds horns, `vocals` a sung line, `bass` a bass line — pair that with
 `--octave-shift 1` to reach trumpet register. `--stem none` skips separation.
 `--force-separate` busts the cache. `--name` writes to a different filename, so
-several readings of one song can coexist.
+several readings of one song can coexist. `--shifts N` averages N randomly
+time-shifted separation passes — Demucs's shift trick, N times slower, and on
+a low-quality source it changes almost nothing.
 
 **Detection** (cached). `--onset-threshold`, `--frame-threshold`,
 `--min-note-ms` — lower to catch more notes and more garbage. `--force-detect`
