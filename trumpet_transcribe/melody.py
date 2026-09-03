@@ -115,6 +115,7 @@ def build_notes(
     harmonic_filter: bool = True,
     start_s: float = 0.0,
     end_s: float = None,
+    source_name: str = "",
 ) -> list:
     """Raw detections -> filtered, transposed, fingered Note objects.
 
@@ -154,6 +155,7 @@ def build_notes(
                 in_range=trumpet.in_range(written),
                 velocity=round(amp, 4),
                 alternates=trumpet.alternates(written),
+                sources=[source_name] if source_name else [],
             )
         )
     return notes

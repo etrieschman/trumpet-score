@@ -13,7 +13,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from trumpet_transcribe import melody, midi_out, render_text
+from trumpet_transcribe import consensus, melodia, melody, midi_out, render_text
 from trumpet_transcribe.detect import detect
 from trumpet_transcribe.intermediate import NoteDocument
 from trumpet_transcribe.separate import DEFAULT_MODEL, DEFAULT_STEM, separate
@@ -23,6 +23,7 @@ from trumpet_transcribe.separate import DEFAULT_MODEL, DEFAULT_STEM, separate
 DEFAULT_ROOT = Path("scores")
 CACHE_DIR = ".cache"
 NOTES_JSON = "notes.json"
+PIPELINES = ("basic-pitch", "melodia")
 MELODY_MIDI = "melody.mid"
 SHEET_EXT = ".txt"
 
@@ -31,7 +32,7 @@ SHEET_EXT = ".txt"
 NEGATED_FLAGS = {"harmonic_filter": "--no-harmonic-filter"}
 # Not worth recording: they say where things went, not what was produced.
 UNRECORDED = {"out", "from_notes", "audio", "force_separate", "force_detect",
-              "model", "device", "name"}
+              "model", "device", "name", "pipelines"}
 
 
 def settings_used(args) -> str:
@@ -75,6 +76,10 @@ def build_parser() -> argparse.ArgumentParser:
                      help="which Demucs stem holds the melody (default: other)")
     sep.add_argument("--model", default=DEFAULT_MODEL, help="Demucs model name")
     sep.add_argument("--device", default="auto", choices=["auto", "cpu", "mps", "cuda"])
+    p.add_argument("--pipelines", default=",".join(PIPELINES),
+                   help="comma-separated detection pipelines to run "
+                        f"(default: all of {','.join(PIPELINES)}). Each writes its "
+                        "own sheet; with more than one, a merged sheet is written too")
     sep.add_argument("--shifts", type=int, default=1, metavar="N",
                      help="average N randomly time-shifted separation passes; "
                           "higher is cleaner and N times slower (default 1)")
@@ -84,6 +89,15 @@ def build_parser() -> argparse.ArgumentParser:
     det.add_argument("--onset-threshold", type=float, default=0.5)
     det.add_argument("--frame-threshold", type=float, default=0.3)
     det.add_argument("--min-note-ms", type=float, default=60.0)
+    det.add_argument("--melodia-voicing", type=float, default=0.2,
+                     help="Melodia voicing tolerance; higher admits more, and "
+                          "usually more accompaniment (default 0.2)")
+    det.add_argument("--merge", default="union", choices=["union", "agreed"],
+                     help="merged sheet holds every note found (union, default) "
+                          "or only notes every pipeline found (agreed)")
+    det.add_argument("--merge-tolerance", type=float, default=consensus.DEFAULT_TOLERANCE,
+                     help="onset difference within which two pipelines are "
+                          "considered to have found the same note")
     det.add_argument("--force-detect", action="store_true", help="ignore cached detections")
 
     filt = p.add_argument_group("filtering (fast, re-run freely)")
@@ -132,42 +146,83 @@ def main(argv=None) -> int:
         work = root / CACHE_DIR / name
         work.mkdir(parents=True, exist_ok=True)
 
-        stem_path = separate(source, work, stem=args.stem, model_name=args.model,
-                             device=args.device, shifts=args.shifts,
-                             force=args.force_separate)
-        events = detect(stem_path, work,
-                        onset_threshold=args.onset_threshold,
-                        frame_threshold=args.frame_threshold,
-                        min_note_ms=args.min_note_ms,
-                        force=args.force_detect)
-        notes = melody.build_notes(events, rule=args.melody_rule, low=args.low,
-                                   high=args.high, min_dur=args.min_dur,
-                                   merge_gap=args.merge_gap,
-                                   octave_shift=args.octave_shift,
-                                   flats=not args.sharps,
-                                   harmonic_filter=args.harmonic_filter,
-                                   start_s=args.start, end_s=args.end)
-        doc = NoteDocument(
-            source=str(source),
-            notes=notes,
-            params={k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()
-                    if k not in {"out", "from_notes"}} | {"settings": settings_used(args)},
-            generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        )
-        doc.to_json(work / NOTES_JSON)
+        requested = [p.strip() for p in args.pipelines.split(",") if p.strip()]
+        unknown = [p for p in requested if p not in PIPELINES]
+        if unknown:
+            build_parser().error(f"unknown pipeline(s): {', '.join(unknown)}")
+
+        def filtered(events, pipeline):
+            return melody.build_notes(
+                events, rule=args.melody_rule, low=args.low, high=args.high,
+                min_dur=args.min_dur, merge_gap=args.merge_gap,
+                octave_shift=args.octave_shift, flats=not args.sharps,
+                harmonic_filter=args.harmonic_filter,
+                start_s=args.start, end_s=args.end, source_name=pipeline)
+
+        results = {}
+        for pipeline in requested:
+            if pipeline == "basic-pitch":
+                stem_path = separate(source, work, stem=args.stem, model_name=args.model,
+                                     device=args.device, shifts=args.shifts,
+                                     force=args.force_separate)
+                events = detect(stem_path, work,
+                                onset_threshold=args.onset_threshold,
+                                frame_threshold=args.frame_threshold,
+                                min_note_ms=args.min_note_ms,
+                                force=args.force_detect)
+            else:
+                events = melodia.detect(source, work,
+                                        voicing_tolerance=args.melodia_voicing,
+                                        force=args.force_detect)
+            results[pipeline] = filtered(events, pipeline)
+            print(f"[{pipeline}] {len(results[pipeline])} notes after filtering")
+
+        params = {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()
+                  if k not in UNRECORDED}
+
+        def document(notes):
+            return NoteDocument(
+                source=str(source), notes=notes, params=params,
+                generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"))
+
+        docs = {name: document(notes) for name, notes in results.items()}
+        if len(results) > 1:
+            merged = consensus.merge(results, tolerance=args.merge_tolerance,
+                                     mode=args.merge)
+            agreed = sum(1 for n in merged if len(n.sources) == len(results))
+            print(f"[merge] {len(merged)} notes, {agreed} found by all "
+                  f"{len(results)} pipelines")
+            docs[None] = document(merged)
+
+        doc = docs.get(None) or next(iter(docs.values()))
+        for label, each in docs.items():
+            suffix = f".{label}" if label else ""
+            each.to_json(work / f"notes{suffix}.json")
         midi_out.write_melody(doc.notes, work / MELODY_MIDI)
 
     root.mkdir(parents=True, exist_ok=True)
-    sheet = render_text.render(doc, phrase_gap=args.phrase_gap,
-                               max_per_line=args.max_per_line,
-                               show_octaves=not args.bare_names,
-                               key=args.key, force_sharps=args.sharps)
-    path = root / f"{name}{SHEET_EXT}"
-    path.write_text(sheet)
+    if args.from_notes:
+        docs = {None: doc}
+
+    written = []
+    for label, each in docs.items():
+        sheet = render_text.render(each, phrase_gap=args.phrase_gap,
+                                   max_per_line=args.max_per_line,
+                                   show_octaves=not args.bare_names,
+                                   key=args.key, force_sharps=args.sharps)
+        suffix = f" ({label})" if label else ""
+        path = root / f"{name}{suffix}{SHEET_EXT}"
+        path.write_text(sheet)
+        written.append(path)
 
     print()
-    print(sheet)
-    print(f"[done] {len(doc.notes)} notes -> {path}")
+    print(render_text.render(doc, phrase_gap=args.phrase_gap,
+                             max_per_line=args.max_per_line,
+                             show_octaves=not args.bare_names,
+                             key=args.key, force_sharps=args.sharps))
+    print(f"[done] {len(doc.notes)} notes")
+    for path in written:
+        print(f"       {path}")
     return 0
 
 

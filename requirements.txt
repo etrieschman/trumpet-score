@@ -14,3 +14,6 @@ pretty_midi>=0.2.10
 # resampy 0.4.2, which imports pkg_resources -- removed in setuptools 81.
 # basic-pitch caps resampy at <0.4.3, so setuptools is the side that has to give.
 setuptools<81
+
+# Melodia predominant-melody extraction (the second pipeline)
+essentia>=2.1b6

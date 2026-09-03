@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from trumpet_transcribe import keysig, melody, render_text, trumpet
+from trumpet_transcribe import consensus, keysig, melody, render_text, trumpet
 from trumpet_transcribe.intermediate import Note, NoteDocument
 
 # Concert -> (written name, first-choice fingering), checked against a standard chart.
@@ -114,6 +114,27 @@ def test_sheet_header_names_the_key():
     assert "KEY" in sheet
     assert "the scale, to jam on:" in sheet
     assert "notes actually detected" in sheet
+
+
+def test_consensus_records_which_pipelines_agreed():
+    a = [_note(0.0, 0.4, 60), _note(1.0, 0.4, 64)]
+    b = [_note(0.1, 0.4, 60), _note(2.0, 0.4, 67)]
+    merged = consensus.merge({"one": a, "two": b}, tolerance=0.3)
+    assert [n.sources for n in merged] == [["one", "two"], ["one"], ["two"]]
+
+
+def test_consensus_agreed_mode_keeps_only_shared_notes():
+    a = [_note(0.0, 0.4, 60), _note(1.0, 0.4, 64)]
+    b = [_note(0.1, 0.4, 60)]
+    merged = consensus.merge({"one": a, "two": b}, tolerance=0.3, mode="agreed")
+    assert [n.concert_midi for n in merged] == [60]
+
+
+def test_consensus_output_stays_monophonic():
+    a = [_note(0.0, 5.0, 60)]          # a long note...
+    b = [_note(1.0, 0.4, 67)]          # ...overlapped by another pipeline's
+    merged = consensus.merge({"one": a, "two": b}, tolerance=0.3)
+    assert merged[0].onset_s + merged[0].duration_s <= merged[1].onset_s + 1e-9
 
 
 def test_document_roundtrip(tmp_path=None):

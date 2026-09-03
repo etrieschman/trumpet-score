@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 @dataclass
@@ -27,6 +27,8 @@ class Note:
     velocity: float = 0.0
     # Carried for renderers that need rhythm; the text sheet omits it.
     alternates: list = field(default_factory=list)
+    # Which detection pipelines found this note.
+    sources: list = field(default_factory=list)
 
     @property
     def offset_s(self) -> float:

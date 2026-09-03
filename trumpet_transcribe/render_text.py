@@ -85,8 +85,8 @@ def render(
         f"# {doc.source}",
         "# Written Bb trumpet pitch (concert +2). First-choice fingerings.",
         f"# Phrase break at gaps > {phrase_gap}s.",
-        f"# * = unplayable, shown as {OUT_OF_RANGE}.   ~ = outside the detected key,"
-        " check these first.",
+        f"# * = unplayable, shown as {OUT_OF_RANGE}.   ~ = outside the detected key."
+        "   ? = only one pipeline found it.",
         f"# Settings: {doc.params.get('settings') or 'defaults'}",
         "",
     ]
@@ -100,11 +100,12 @@ def render(
         out += _key_header(key_info, use_sharps, show_octaves)
         out += ["-" * 72, ""]
 
+    all_sources = {s for n in doc.notes for s in n.sources}
     scale = set()
     if key_info:
         scale = {(key_info["tonic_pc"] + d) % 12 for d in keysig.DEGREES[key_info["mode"]]}
 
-    flagged = outside = 0
+    flagged = outside = lone = 0
     for phrase in split_phrases(doc.notes, phrase_gap, max_per_line):
         cells = []
         for note in phrase:
@@ -117,10 +118,17 @@ def render(
             elif scale and note.written_midi % 12 not in scale:
                 # Chromatic passing tone, or a detection error.
                 name += "~"
+            if len(all_sources) > 1 and len(note.sources) < len(all_sources):
+                name += "?"
+                lone += 1
                 outside += 1
             cells.append((name, note.fingering))
         out += _aligned_rows(cells, label=timestamp(phrase[0].onset_s)) + [""]
 
+    if lone:
+        out.append(f"# {lone} note(s) marked ? were found by only one pipeline of "
+                   f"{len(all_sources)}.")
+        out.append("")
     if outside:
         out.append(f"# {outside} note(s) marked ~ fall outside the detected key -- chromatic")
         out.append("# passing tones, or detection errors. Check these first.")
