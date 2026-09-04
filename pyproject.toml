@@ -17,9 +17,5 @@ dependencies = [
     "setuptools<81",
 ]
 
-[project.optional-dependencies]
-# Mel-Band RoFormer separation. Needs ffmpeg on PATH: brew install ffmpeg
-roformer = ["audio-separator"]
-
 [tool.uv]
 package = false
