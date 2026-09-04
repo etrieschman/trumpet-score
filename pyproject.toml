@@ -1,0 +1,25 @@
+[project]
+name = "trumpet-score"
+version = "0.1.0"
+description = "Turn a recording into a Bb trumpet note sheet with valve fingerings"
+requires-python = ">=3.11"
+dependencies = [
+    "torch>=2.1",
+    "torchaudio",
+    "demucs>=4.0.1",          # htdemucs_6s source separation
+    "basic-pitch[onnx]>=0.4", # note detection; the onnx extra avoids TensorFlow
+    # Newer essentia dev builds ship cp314 wheels only; this is the last with cp311.
+    "essentia==2.1b6.dev1389",
+    "soundfile>=0.12",        # wav/flac/ogg/mp3 without ffmpeg
+    "librosa>=0.10",          # resampling only
+    "pretty_midi>=0.2.10",
+    # resampy (via basic-pitch) imports pkg_resources, removed in setuptools 81.
+    "setuptools<81",
+]
+
+[project.optional-dependencies]
+# Mel-Band RoFormer separation. Needs ffmpeg on PATH: brew install ffmpeg
+roformer = ["audio-separator"]
+
+[tool.uv]
+package = false

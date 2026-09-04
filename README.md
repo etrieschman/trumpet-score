@@ -25,11 +25,12 @@ key.
 
 ## Install
 
-Needs Python 3.11 — macOS's built-in 3.9 is too old for current torch/demucs.
-
 ```bash
-uv venv --python 3.11 .venv && VIRTUAL_ENV=.venv uv pip install -r requirements.txt
+uv sync
 ```
+
+Needs Python 3.11+ — macOS's built-in 3.9 is too old for current torch/demucs;
+uv fetches one if needed.
 
 No ffmpeg needed. `soundfile` handles wav/flac/ogg/mp3; `.m4a`/AAC is decoded
 with `afconvert`, which ships with macOS.
@@ -37,14 +38,14 @@ with `afconvert`, which ships with macOS.
 ## Use
 
 ```bash
-.venv/bin/python transcribe.py song.mp3
+uv run transcribe.py song.mp3
 ```
 
 The first run downloads Demucs weights (~300 MB) and separates the track; both
 are cached, so later runs against the same file return in under a second.
 
 ```bash
-.venv/bin/python transcribe.py song.mp3 --min-dur 0.15 --phrase-gap 0.7
+uv run transcribe.py song.mp3 --min-dur 0.15 --phrase-gap 0.7
 ```
 
 Runs are reproducible, and each sheet records the flags that produced it.
@@ -68,7 +69,7 @@ scores/
 only that and never touches audio:
 
 ```bash
-.venv/bin/python transcribe.py --from-notes "scores/.cache/So What/notes.json" --max-per-line 8
+uv run transcribe.py --from-notes "scores/.cache/So What/notes.json" --max-per-line 8
 ```
 
 ## Flags
@@ -105,7 +106,7 @@ busts the cache.
 Defaults favour precision. To trade that for recall:
 
 ```bash
-.venv/bin/python transcribe.py song.mp3 --onset-threshold 0.25 --frame-threshold 0.15 --min-note-ms 30
+uv run transcribe.py song.mp3 --onset-threshold 0.25 --frame-threshold 0.15 --min-note-ms 30
 ```
 
 Judge the result against a passage you already know by ear — note count is a
@@ -158,7 +159,7 @@ gaps no threshold setting can recover. Use a stereo rip.
 ## Tests
 
 ```bash
-.venv/bin/python tests/test_pipeline.py
+uv run tests/test_pipeline.py
 ```
 
 Covers the fingering chart, transposition, overtone suppression, note merging,

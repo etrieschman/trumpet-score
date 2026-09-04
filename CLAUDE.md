@@ -155,7 +155,9 @@ against known notes does.
 
 ## Things learned the hard way
 
-- `uv venv` does not install pip. Use `VIRTUAL_ENV=.venv uv pip install ...`.
+- The project is a uv project: `uv sync` to set up, `uv run transcribe.py` to run.
+  pyproject.toml is the source of truth; there is no requirements.txt.
+- essentia is pinned to 2.1b6.dev1389: newer dev builds ship cp314 wheels only.
 - basic-pitch pins `resampy<0.4.3`; that resampy imports `pkg_resources`, which
   setuptools 81 removed. Hence `setuptools<81` in requirements.
 - Voice Memos' group container is TCC-protected — unreadable even by `head`.
