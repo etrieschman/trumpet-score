@@ -76,10 +76,11 @@ def build_parser() -> argparse.ArgumentParser:
                      help="which Demucs stem holds the melody (default: other)")
     sep.add_argument("--model", default=DEFAULT_MODEL, help="Demucs model name")
     sep.add_argument("--device", default="auto", choices=["auto", "cpu", "mps", "cuda"])
-    p.add_argument("--pipelines", default=",".join(PIPELINES),
+    p.add_argument("--pipelines", default="basic-pitch",
                    help="comma-separated detection pipelines to run "
-                        f"(default: all of {','.join(PIPELINES)}). Each writes its "
-                        "own sheet; with more than one, a merged sheet is written too")
+                        f"any of {','.join(PIPELINES)} (default: basic-pitch). "
+                        "Each writes its own sheet; with more than one, a merged "
+                        "sheet is written too")
     sep.add_argument("--shifts", type=int, default=1, metavar="N",
                      help="average N randomly time-shifted separation passes; "
                           "higher is cleaner and N times slower (default 1)")
@@ -89,6 +90,9 @@ def build_parser() -> argparse.ArgumentParser:
     det.add_argument("--onset-threshold", type=float, default=0.5)
     det.add_argument("--frame-threshold", type=float, default=0.3)
     det.add_argument("--min-note-ms", type=float, default=60.0)
+    det.add_argument("--melodia-source", default="stem", choices=["stem", "mix"],
+                     help="run Melodia on the separated stem (default) or the "
+                          "whole mix")
     det.add_argument("--melodia-voicing", type=float, default=0.2,
                      help="Melodia voicing tolerance; higher admits more, and "
                           "usually more accompaniment (default 0.2)")
@@ -171,7 +175,13 @@ def main(argv=None) -> int:
                                 min_note_ms=args.min_note_ms,
                                 force=args.force_detect)
             else:
-                events = melodia.detect(source, work,
+                if args.melodia_source == "stem":
+                    target = separate(source, work, stem=args.stem,
+                                      model_name=args.model, device=args.device,
+                                      shifts=args.shifts, force=args.force_separate)
+                else:
+                    target = source
+                events = melodia.detect(target, work, label=args.melodia_source,
                                         voicing_tolerance=args.melodia_voicing,
                                         force=args.force_detect)
             results[pipeline] = filtered(events, pipeline)
@@ -185,7 +195,12 @@ def main(argv=None) -> int:
                 source=str(source), notes=notes, params=params,
                 generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"))
 
-        docs = {name: document(notes) for name, notes in results.items()}
+        # A single pipeline is the primary result, so it takes the unsuffixed
+        # name; with several, that name belongs to the merge.
+        if len(results) == 1:
+            docs = {None: document(next(iter(results.values())))}
+        else:
+            docs = {name: document(notes) for name, notes in results.items()}
         if len(results) > 1:
             merged = consensus.merge(results, tolerance=args.merge_tolerance,
                                      mode=args.merge)

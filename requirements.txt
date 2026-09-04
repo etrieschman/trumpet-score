@@ -1,7 +1,6 @@
 # Python 3.11 required. The system python on macOS (3.9) is too old for
 # current torch/demucs; see README for the uv one-liner.
 
-numpy<2                   # demucs 4.x is not numpy-2 clean
 torch>=2.1
 torchaudio
 demucs>=4.0.1             # htdemucs_6s source separation
@@ -16,4 +15,4 @@ pretty_midi>=0.2.10
 setuptools<81
 
 # Melodia predominant-melody extraction (the second pipeline)
-essentia>=2.1b6
+essentia

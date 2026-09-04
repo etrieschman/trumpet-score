@@ -26,12 +26,14 @@ def _cache_key(source: Path, params: dict) -> dict:
 def detect(
     source: Path,
     out_dir: Path,
+    label: str = "stem",
     voicing_tolerance: float = 0.2,
     min_duration: float = 0.1,
     force: bool = False,
 ) -> list:
     """Return note events as [start_s, end_s, concert_midi, confidence]."""
-    params = {"voicing_tolerance": voicing_tolerance, "min_duration": min_duration}
+    params = {"voicing_tolerance": voicing_tolerance, "min_duration": min_duration,
+              "label": label}
     raw_path = out_dir / RAW_NOTES
     key = _cache_key(source, params)
 
