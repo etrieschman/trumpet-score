@@ -100,7 +100,9 @@ busts the cache.
 | `--start` / `--end` | restrict to a window, `mm:ss` or seconds |
 | `--min-dur` | drop notes shorter than N seconds (0.08) |
 | `--merge-gap` | join same-pitch notes closer than N seconds (0.06) |
-| `--melody-rule` | `top` keeps the highest voice, `loudest` the strongest |
+| `--melody-rule` | `contour` (default) follows the best-connected line; `top` takes the highest pitch, `loudest` the strongest |
+| `--jump-penalty` | cost per semitone of leaping, for `contour` |
+| `--rest-threshold` | how loud a note must be, relative to the track's loudest, to beat silence |
 | `--octave-shift` | move everything by N octaves |
 | `--in-key` | drop notes outside the detected key (or `--key`) |
 | `--low` / `--high` | concert MIDI bounds for discarding garbage |
@@ -120,7 +122,12 @@ uv run transcribe.py song.mp3 --onset-threshold 0.25 --frame-threshold 0.15 --mi
 Judge the result against a passage you already know by ear — note count is a
 poor proxy for correctness.
 
-For modal material, `--in-key --low N` is the strongest cleanup available. The
+Reach for `--rest-threshold` before the blunt filters: it raises how prominent a
+note must be to beat silence, which removes strays while the soloist rests
+without touching the line itself.
+
+For modal material, `--in-key --low N` is the strongest cleanup available, at
+the cost of dropping real accidentals. The
 two catch different things: `--in-key` removes detector artifacts on pitches
 outside the scale, `--low` removes accompaniment that is *inside* the scale but
 below the register the melody ever uses. Neither sees what the other does.
@@ -135,7 +142,8 @@ Notes marked `~` are the first to distrust.
 | --- | --- |
 | separation | Demucs `htdemucs_6s` isolates a stem |
 | detection | basic-pitch (ONNX) emits polyphonic note events |
-| filtering | overtone suppression, reduction to one voice, length and range filters, merging of held notes |
+| melody | a Viterbi path over candidate notes, scoring amplitude against the cost of leaping — the melody is a connected line, not the top pitch |
+| filtering | overtone suppression, length and range filters, merging of held notes |
 | key | Krumhansl-Schmuckler over a duration-weighted pitch-class histogram, across major, minor, dorian and mixolydian |
 | rendering | phrase lines broken on silence, fingerings aligned beneath |
 

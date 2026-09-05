@@ -87,6 +87,82 @@ def reduce_to_melody(events: list, rule: str = "top", hop: float = HOP) -> list:
     return segments
 
 
+def track_contour(
+    events: list,
+    hop: float = HOP,
+    jump_penalty: float = 0.35,
+    rest_score: float = 0.18,
+) -> list:
+    """Pick the melody as the best-connected path, not the highest pitch.
+
+    A melody is a line: mostly stepwise, occasionally leaping, and usually the
+    most prominent thing sounding. Taking the top pitch per frame instead hands
+    the line to whatever accompaniment voices above it, and grabs strays
+    whenever the soloist rests.
+
+    A Viterbi decode whose state is the last pitch that sounded. Resting keeps
+    that state, so continuity carries across gaps -- otherwise every rest, even
+    a 50ms one between two notes, would let an unrelated note rejoin the line
+    for free. Sounding a note costs `jump_penalty` per semitone from the line
+    and earns the note's amplitude; resting earns `rest_score`, so a note has to
+    be at least that prominent to be worth leaving silence for.
+    """
+    if not events:
+        return []
+
+    frames = int(np.ceil(max(e[1] for e in events) / hop)) + 1
+    active = [{} for _ in range(frames)]
+    for start_s, end_s, pitch, amp in events:
+        lo = max(0, int(np.floor(start_s / hop)))
+        hi = min(frames, max(lo + 1, int(np.ceil(end_s / hop))))
+        for i in range(lo, hi):
+            slot = active[i]
+            slot[int(pitch)] = max(slot.get(int(pitch), 0.0), float(amp))
+
+    pitches = np.array(sorted({int(e[2]) for e in events}))
+    index = {p: i for i, p in enumerate(pitches)}
+    n = len(pitches)
+    step_cost = jump_penalty * np.abs(pitches[:, None] - pitches[None, :])
+
+    scores = np.zeros(n)
+    came_from = np.full((frames, n), -1, dtype=np.int32)   # -1 means "rested"
+    for f, slot in enumerate(active):
+        nxt = scores + rest_score                          # rest: state unchanged
+        for pitch, amp in slot.items():
+            j = index[pitch]
+            candidates = scores - step_cost[j]
+            source = int(np.argmax(candidates))
+            sounded = candidates[source] + amp
+            if sounded > nxt[j]:
+                nxt[j] = sounded
+                came_from[f, j] = source
+        scores = nxt
+
+    state = int(np.argmax(scores))
+    voiced = np.zeros(frames, dtype=bool)
+    path = np.zeros(frames, dtype=np.int32)
+    for f in range(frames - 1, -1, -1):
+        path[f] = state
+        source = came_from[f, state]
+        if source >= 0:
+            voiced[f] = True
+            state = int(source)
+
+    segments, run_start = [], None
+    for f in range(frames + 1):
+        here = int(path[f]) if f < frames and voiced[f] else -1
+        previous = int(path[f - 1]) if f > 0 and voiced[f - 1] else -1
+        if here != previous:
+            if previous >= 0:
+                pitch = int(pitches[previous])
+                amps = [active[j][pitch] for j in range(run_start, f)
+                        if pitch in active[j]]
+                segments.append([run_start * hop, f * hop, pitch,
+                                 float(max(amps)) if amps else 0.5])
+            run_start = f
+    return segments
+
+
 def merge_repeats(events: list, merge_gap: float) -> list:
     """Join consecutive same-pitch events separated by less than merge_gap.
 
@@ -130,6 +206,8 @@ def build_notes(
     harmonic_filter: bool = True,
     start_s: float = 0.0,
     end_s: float = None,
+    jump_penalty: float = 0.35,
+    rest_score: float = 0.18,
 ) -> list:
     """Raw detections -> filtered, transposed, fingered Note objects.
 
@@ -150,7 +228,11 @@ def build_notes(
     in_bounds = [ev for ev in shifted if low <= ev[2] <= high]
     if harmonic_filter:
         in_bounds = suppress_harmonics(in_bounds)
-    voiced = reduce_to_melody(in_bounds, rule=rule)
+    if rule == "contour":
+        voiced = track_contour(in_bounds, jump_penalty=jump_penalty,
+                               rest_score=rest_score)
+    else:
+        voiced = reduce_to_melody(in_bounds, rule=rule)
     long_enough = [ev for ev in voiced if (ev[1] - ev[0]) >= min_dur]
     final = merge_repeats(long_enough, merge_gap)
 

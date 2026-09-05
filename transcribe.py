@@ -91,7 +91,19 @@ def build_parser() -> argparse.ArgumentParser:
                       help="ignore everything before this point (mm:ss or seconds)")
     filt.add_argument("--end", type=parse_time, default=None, metavar="TIME",
                       help="ignore everything after this point (mm:ss or seconds)")
-    filt.add_argument("--melody-rule", default="top", choices=["top", "loudest"])
+    filt.add_argument("--melody-rule", default="contour",
+                      choices=["contour", "top", "loudest"],
+                      help="how to pick one line from overlapping notes: "
+                           "contour follows the best-connected melodic path "
+                           "(default), top takes the highest pitch, loudest the "
+                           "strongest")
+    filt.add_argument("--jump-penalty", type=float, default=0.35,
+                      help="cost per semitone of leaping, for --melody-rule "
+                           "contour. Higher clings to a smoother line")
+    filt.add_argument("--rest-threshold", type=float, default=0.18,
+                      help="how loud a note must be, relative to the loudest in "
+                           "the track, to beat silence. Raise it to drop quiet "
+                           "strays while the soloist rests")
     filt.add_argument("--min-dur", type=float, default=0.08,
                       help="drop notes shorter than this many seconds")
     filt.add_argument("--merge-gap", type=float, default=0.06,
@@ -149,7 +161,8 @@ def main(argv=None) -> int:
             min_dur=args.min_dur, merge_gap=args.merge_gap,
             octave_shift=args.octave_shift, flats=not args.sharps,
             harmonic_filter=args.harmonic_filter,
-            start_s=args.start, end_s=args.end)
+            start_s=args.start, end_s=args.end,
+            jump_penalty=args.jump_penalty, rest_score=args.rest_threshold)
 
         if args.in_key and notes:
             from trumpet_transcribe import keysig

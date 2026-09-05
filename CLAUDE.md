@@ -135,9 +135,32 @@ the notes it adds are right.
 
 There is no good automated proxy for separation quality here. Ask.
 
-## --in-key plus --low is the cleanup that works
+## The melody is a connected line, not the top pitch
 
-On So What: 149 notes -> 116 with `--low 60` -> 74 with `--in-key` as well.
+`--melody-rule contour` (default) is a Viterbi decode whose state is the last
+pitch that sounded. It replaced the `top` rule, which handed the line to
+whatever accompaniment voiced above the soloist and grabbed strays whenever
+the soloist rested. On So What it produced a coherent line where `top` needed
+`--in-key --low 60` to be readable at all -- 106 notes clean, against 74 after
+filtering, and the filters are no longer needed.
+
+Two things are load-bearing:
+
+- **Resting keeps the pitch state.** An earlier version used a single REST
+  state with zero-cost transitions in and out, so any gap -- even 50ms between
+  two notes -- let an unrelated note rejoin the line for free. That is exactly
+  the stray-during-rests problem, and it made `--rest-threshold` do work the
+  algorithm should have done. Fixing it removed the low-register strays at a
+  *lower* threshold.
+- **Amplitude is raw, not normalised by the track's loudest note.** basic-pitch
+  amplitudes are model confidences and already comparable, so normalising made
+  `--rest-threshold` mean something different per track.
+
+## --in-key plus --low is a fallback, not the fix
+
+Superseded by contour tracking for So What; keep for material where the line
+genuinely cannot be tracked. On So What with the old `top` rule: 149 notes ->
+116 with `--low 60` -> 74 with `--in-key` as well.
 The two filters are complementary and neither substitutes for the other.
 `--in-key` removes artifacts on out-of-scale pitches (G#3, G#4 in E dorian);
 `--low` removes bass and piano that sit inside the scale but below the

@@ -131,6 +131,21 @@ def test_detection_cache_keys_on_stem_content_not_size():
     assert ka != kb
 
 
+def test_contour_prefers_the_connected_line_over_the_top_pitch():
+    """A loud outlier above the line must lose to a note that continues it."""
+    line = [[t * 0.5, t * 0.5 + 0.45, 60 + (t % 2), 0.8] for t in range(6)]
+    outlier = [[1.0, 1.45, 84, 0.95]]        # loud, high, unconnected
+    picked = {p for _, _, p, _ in melody.track_contour(line + outlier)}
+    assert 84 not in picked, picked
+    assert picked <= {60, 61}
+
+
+def test_contour_rest_threshold_silences_quiet_strays():
+    stray = [[0.0, 0.4, 60, 0.05]]
+    assert melody.track_contour(stray, rest_score=0.5) == []
+    assert melody.track_contour(stray, rest_score=0.01) != []
+
+
 def test_document_roundtrip(tmp_path=None):
     import tempfile
     tmp = Path(tmp_path or tempfile.mkdtemp())
