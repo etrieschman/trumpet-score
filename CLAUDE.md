@@ -116,18 +116,24 @@ the version that proved playable. `--stem bass` was tried on a hunch that the
 head was the bass line; it was wrong. Do not re-theorise the arrangement —
 ask which sheet worked.
 
-## The best Demucs model depends on the recording
+## Use htdemucs_6s. Out-of-key rate does NOT measure separation quality.
 
-Measured, same filters, out-of-key rate as the junk proxy:
+**Both songs read better on htdemucs_6s.** ft was recommended on the strength
+of an out-of-key comparison (So What solo: 6s 18%, ft 20% — near identical, so
+ft's doubled note count looked free). The user read the result and it was
+clearly worse.
 
-- So What (solo, >=1:30): 6s 45 notes @ 18% out-of-key, ft 81 @ 20%. ft nearly
-  doubles the notes at unchanged precision and is the only one that finds a
-  figure the user named. **Use ft.**
-- Agua Fria: 6s 72 notes @ 3%, ft 88 @ 14%. The 16 extra notes are
-  disproportionately out-of-key. **Use 6s.**
+The proxy is structurally broken: **the piano plays in the same key as the
+soloist**, so accompaniment bleed is invisible to an out-of-key measure. ft's
+extra notes at 1:28 were A5, C#5, G5, C#6 — all inside E dorian, all clutter.
+Out-of-key catches detector artifacts, never bleed, and bleed is the actual
+failure mode.
 
-So there is no global default worth chasing. Try both on new material and
-compare out-of-key rate, not note count.
+Adding notes also repacks the phrase lines, so a figure the user had learned to
+read on one line gets split across two. A change can hurt readability even when
+the notes it adds are right.
+
+There is no good automated proxy for separation quality here. Ask.
 
 ## RoFormer is not an option for horns (verified)
 
