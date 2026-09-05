@@ -116,6 +116,19 @@ the version that proved playable. `--stem bass` was tried on a hunch that the
 head was the bass line; it was wrong. Do not re-theorise the arrangement —
 ask which sheet worked.
 
+## The best Demucs model depends on the recording
+
+Measured, same filters, out-of-key rate as the junk proxy:
+
+- So What (solo, >=1:30): 6s 45 notes @ 18% out-of-key, ft 81 @ 20%. ft nearly
+  doubles the notes at unchanged precision and is the only one that finds a
+  figure the user named. **Use ft.**
+- Agua Fria: 6s 72 notes @ 3%, ft 88 @ 14%. The 16 extra notes are
+  disproportionately out-of-key. **Use 6s.**
+
+So there is no global default worth chasing. Try both on new material and
+compare out-of-key rate, not note count.
+
 ## RoFormer is not an option for horns (verified)
 
 Checked audio-separator's full catalogue: all 92 RoFormer models are 2-stem

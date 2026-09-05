@@ -76,9 +76,11 @@ uv run transcribe.py --from-notes "scores/.cache/So What/notes.json" --max-per-l
 
 **Separation** (slow, cached). `--model` selects the Demucs model:
 `htdemucs_6s` (default) splits six stems, so guitar and piano leave `other`;
-`htdemucs_ft` is a fine-tuned bag of four models — about four times slower, four
-stems rather than six, and on test material it recovers notes `htdemucs_6s`
-misses entirely. Worth trying when a passage is missing.
+`htdemucs_ft` is a fine-tuned bag of four models — about four times slower and
+four stems rather than six. Which one wins depends on the recording: on one test
+track `ft` nearly doubled the notes in a solo at unchanged precision, on another
+it added 14% out-of-key junk. Try both and compare the `~` count, not the note
+count.
 
 `--stem` chooses what to transcribe: `other` (default) holds horns, `vocals` a sung line, `bass` a bass line — pair that with
 `--octave-shift 1` to reach trumpet register. `--stem none` skips separation.
