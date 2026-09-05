@@ -89,10 +89,9 @@ def separate(
 
     print(f"[separate] running Demucs on {dev} ({wav.shape[1] / sr:.0f}s of audio, "
           f"{shifts} shift{'s' if shifts != 1 else ''})")
-    # Demucs's shift trick: run the model on `shifts` random time offsets and
-    # average. Averaging suppresses the part of the model's error that moves
-    # with the offset. Demucs seeds from Python's `random`, not torch, so both
-    # need pinning to keep runs reproducible.
+    # Demucs's shift trick: average the model over `shifts` random time
+    # offsets. Demucs draws them from Python's `random`, not torch, so both
+    # RNGs are pinned to keep runs reproducible.
     random.seed(0)
     torch.manual_seed(0)
     try:

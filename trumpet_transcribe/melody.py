@@ -1,7 +1,7 @@
-"""Turn raw polyphonic detections into one clean monophonic melody line.
+"""Raw polyphonic detections -> one monophonic melody line.
 
-Order matters: range filter -> reduce to one voice -> segment -> drop blips ->
-merge held notes. Reduction precedes the length filter so a short fragment of an
+Order: range filter -> reduce to one voice -> segment -> drop blips -> merge
+held notes. Reduction precedes the length filter so a short fragment of an
 inner voice cannot survive by being the only thing sounding.
 """
 from __future__ import annotations
@@ -24,11 +24,7 @@ def suppress_harmonics(
     min_overlap: float = 0.5,
     amp_ratio: float = 0.8,
 ) -> list:
-    """Drop detections that look like overtones of a louder, lower note.
-
-    Brass overtones are strong enough that the detector reports partials as
-    notes in their own right.
-    """
+    """Drop detections that look like overtones of a louder, lower note."""
     keep = []
     for i, (start_s, end_s, pitch, amp) in enumerate(events):
         span = max(end_s - start_s, 1e-9)
@@ -46,12 +42,8 @@ def suppress_harmonics(
 
 
 def reduce_to_melody(events: list, rule: str = "top", hop: float = HOP) -> list:
-    """Collapse overlapping note events to a single voice.
-
-    'top' keeps the highest sounding pitch (right for a lead line most of the
-    time); 'loudest' keeps the strongest, which helps when the melody sits under
-    a higher harmony part.
-    """
+    """Collapse overlapping notes to one voice by pitch ('top') or amplitude
+    ('loudest'). See track_contour for the default rule."""
     if not events:
         return []
 
@@ -93,19 +85,12 @@ def track_contour(
     jump_penalty: float = 0.35,
     rest_score: float = 0.18,
 ) -> list:
-    """Pick the melody as the best-connected path, not the highest pitch.
+    """Pick the melody as the best-connected path through overlapping notes.
 
-    A melody is a line: mostly stepwise, occasionally leaping, and usually the
-    most prominent thing sounding. Taking the top pitch per frame instead hands
-    the line to whatever accompaniment voices above it, and grabs strays
-    whenever the soloist rests.
-
-    A Viterbi decode whose state is the last pitch that sounded. Resting keeps
-    that state, so continuity carries across gaps -- otherwise every rest, even
-    a 50ms one between two notes, would let an unrelated note rejoin the line
-    for free. Sounding a note costs `jump_penalty` per semitone from the line
-    and earns the note's amplitude; resting earns `rest_score`, so a note has to
-    be at least that prominent to be worth leaving silence for.
+    Viterbi decode whose state is the last pitch that sounded. Sounding a note
+    earns its amplitude and costs `jump_penalty` per semitone from that pitch;
+    resting earns `rest_score` and leaves the state unchanged, so continuity
+    carries across gaps.
     """
     if not events:
         return []
@@ -166,8 +151,8 @@ def track_contour(
 def merge_repeats(events: list, merge_gap: float) -> list:
     """Join consecutive same-pitch events separated by less than merge_gap.
 
-    Held notes arrive as several detections. The cost is that fast rearticulated
-    notes at one pitch merge into one; not separable from pitch alone.
+    Held notes arrive as several detections. Fast rearticulated notes at one
+    pitch merge into one; pitch alone cannot separate them.
     """
     merged = []
     for ev in sorted(events, key=lambda e: e[0]):
@@ -180,12 +165,9 @@ def merge_repeats(events: list, merge_gap: float) -> list:
 
 
 def filter_to_key(notes: list, key_info: dict) -> list:
-    """Drop notes outside the key's scale.
+    """Drop notes whose pitch class lies outside the key's scale.
 
-    In modal jazz an isolated out-of-key note is far more often a detection
-    artifact than a chromatic passing tone, so this trades a few real
-    accidentals for a much cleaner read. The key is estimated from the
-    unfiltered notes, so filtering cannot bias the estimate that drives it.
+    Estimate `key_info` on the unfiltered notes; filtering first would bias it.
     """
     from . import keysig
 
@@ -211,14 +193,11 @@ def build_notes(
 ) -> list:
     """Raw detections -> filtered, transposed, fingered Note objects.
 
-    low/high are concert MIDI bounds for discarding obvious garbage; they are
-    deliberately wider than the trumpet's range so that near-misses survive to
-    be flagged rather than silently dropped.
-
-    start_s/end_s clip to a time window; timestamps stay absolute.
+    low/high are concert MIDI bounds, set wider than the trumpet's range so
+    near-misses are flagged rather than dropped. start_s/end_s clip to a
+    window; timestamps stay absolute.
     """
-    # Keep what sounds inside the window, not just what starts in it, so the
-    # window trims the result rather than changing it.
+    # Keep what sounds inside the window, not just what starts in it.
     windowed = [
         [max(s0, start_s), e0 if end_s is None else min(e0, end_s), p0, a0]
         for s0, e0, p0, a0 in events

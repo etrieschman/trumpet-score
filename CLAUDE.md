@@ -1,241 +1,94 @@
 # trumpet-score — working notes
 
-Turn a recording into a Bb trumpet note sheet: written pitch, valve fingerings,
-detected key. No rhythm notation — rhythm comes by ear with the track playing.
-See README.md for usage.
+A recording in, a written-Bb-trumpet note sheet out: pitches, valve fingerings,
+key, scale. No rhythm notation. See README.md for usage.
 
-## Status
-
-**Done and verified.** Separation, detection, filtering, transposition,
-fingerings, key detection, the text sheet, MIDI byproducts, caching. 12 tests
-pass, including an end-to-end run against synthetic audio with known pitches.
-
-Sheet-music output was built and then deliberately removed — see below.
+`uv sync` to set up, `uv run transcribe.py` to run. pyproject.toml is the source
+of truth; there is no requirements.txt.
 
 ## Architecture
 
 `notes.json` is the contract. Analysis writes it; renderers read only it and
-never touch audio. Adding a renderer means adding a module — nothing else moves.
+never touch audio. A new renderer is a new module and nothing else moves.
 
 ```
-audio.py      decode (no ffmpeg; afconvert for m4a)
-separate.py   Demucs htdemucs_6s -> stem wav        [cached]
-detect.py     basic-pitch -> raw note events        [cached]
-melody.py     harmonic suppression, monophonic reduction, filtering, merging
-keysig.py     Krumhansl-Schmuckler key + mode, scale generation
-trumpet.py    concert->written transpose, fingering chart, range check
-intermediate.py    the notes.json schema (v3)
-render_text.py     the note sheet
+audio.py         decode (no ffmpeg; afconvert for m4a)
+separate.py      Demucs -> stem wav                    [cached]
+detect.py        basic-pitch -> raw note events        [cached]
+melody.py        contour tracking, overtone suppression, filters, merging
+keysig.py        Krumhansl-Schmuckler key + mode, scale generation
+trumpet.py       concert->written transpose, fingering chart, range check
+intermediate.py  the notes.json schema (v5)
+render_text.py   the note sheet
 ```
 
-## Output layout
+Deliverables go to `scores/<song>.txt`; working state to
+`scores/.cache/<song>/`, which is disposable. `--out DIR` moves the root.
 
-One deliverable per song: `scores/<song>.txt`. All working state (stems, raw
-detections, notes.json, MIDI) goes in `scores/.cache/<song>/` and is safe to
-delete. `--out DIR` moves the root.
+## Load-bearing details
 
-## TODO — sheet music, if it ever comes back
+**Separation determinism.** `separate.py` pins both `random.seed` and
+`torch.manual_seed`. Demucs draws its time shifts from Python's `random`, so
+seeding torch alone leaves runs unreproducible — identical inputs then yield
+different stems and silently different transcriptions.
 
-It was built (MusicXML, opened in MuseScore, fingerings above the staff) and
-removed in favour of the text sheet. **The working implementation is in git
-history: `git show 3fecc51`** — `render_musicxml.py` and `tempo.py`. Recover
-rather than rewrite. What was there and what it needs:
+**Detection cache keys on stem content, not size.** Every separation model
+writes a stem of identical size for a given input, so a size-keyed cache serves
+one model's detections for another model's audio.
 
-1. **Restore the `tempo` field to the intermediate.** Schema went v2 -> v3 when
-   it was dropped. Renderers must not touch audio, so tempo has to be detected
-   during analysis and stored.
-2. **Tempo detection was the blocker, and it is not solved.** The approach:
-   beat-track the mix with librosa (Ellis dynamic programming), then score
-   candidate tempos and their metrical relatives by how well the *detected note
-   onsets* land on the grid. It got the synthetic fixture exactly right (100 bpm
-   from a tracker that said 117) but reported 195 for So What (true ~136) and
-   216 for Agua Fria (true ~108) — both roughly double. **Halving errors are the
-   failure mode to attack first.** It emitted a confidence score that correctly
-   flagged both failures, so gating on confidence and asking for `--bpm` is a
-   reasonable fallback.
-3. **Measure grid-fit error in SECONDS, not fractions of a grid step.** This
-   caused a real bug: a coarser grid tolerates more absolute jitter, so
-   normalized error systematically prefers half the true tempo.
-4. **No triplet support.** `--grid` was 2/4/8 only. Needs
-   `<time-modification>` in the emitter and a triplet-aware duration table.
-   Matters for jazz.
-5. **4/4 assumed.** The beat unit was always a quarter, so 6/8 was not
-   expressible.
-6. The duration decomposition (greedy longest-first, with each value required to
-   align to its own undotted base) was the part that worked well — it notates
-   syncopation as tied pieces correctly. Keep it.
+**Contour tracking keeps its pitch state through rests.** The Viterbi state is
+the last pitch that sounded; resting preserves it. A rest state with free
+transitions in and out lets any note rejoin the line after a 50ms gap, which is
+the stray-note problem in disguise.
 
-## What the tuning knobs actually buy
+**Contour amplitudes are raw.** basic-pitch amplitudes are model confidences and
+already comparable across tracks; normalising them by the track maximum makes
+`--rest-threshold` mean something different per song.
 
-Measured, not guessed:
+**basic-pitch pins `resampy<0.4.3`**, and that resampy imports `pkg_resources`,
+removed in setuptools 81. Hence `setuptools<81`.
 
-- Agua Fria (phone recording, dense mix): defaults 168 raw -> 70 notes. Loose
-  settings 536 raw -> 105 notes. The extra 35 are mostly junk; defaults read
-  better.
-- So What solo (`--start 1:30 --low 58`): defaults 163 raw -> 31 notes. Loose
-  settings 391 raw -> 35 notes. **Tripling raw detections bought 4 notes**,
-  which says the bottleneck is separation quality, not detection sensitivity.
-  The `other` stem still holds piano and sax alongside the trumpet.
+## What has been ruled out
 
-These counts predate the determinism fix and will not reproduce exactly. The
-rule they suggested — "if raw detections rise and the final count does not, the
-bottleneck is separation" — proved WRONG on So What; see "Judge results against
-ground truth" below.
+**RoFormer cannot isolate a horn.** All 92 RoFormer models in audio-separator
+are 2-stem target/residual separators; a listing of `['vocals', 'other']` means
+"vocals vs everything else", not Demucs's musical `other` stem. The only models
+with a real multi-stem `other` are the Demucs family. audio-separator also
+hard-requires ffmpeg, which is why ffmpeg is installed here; nothing in the
+project uses it.
 
-## Ensembling: measured, mostly useless here
+**Melodia as a second pipeline.** Essentia predominant-melody extraction plus a
+consensus stage; agreement with basic-pitch was 38/323 on So What and the merged
+union read worse than basic-pitch alone. Removed. In git history if a second
+opinion on a disputed note is ever wanted.
 
-`--shifts N` restores Demucs's shift trick (N random time offsets, averaged).
-It must stay seeded via `random.seed` — Demucs uses Python's `random`, not
-torch, so `torch.manual_seed` alone does not make it reproducible.
+**Shift ensembling.** `--shifts N` exists and does almost nothing here: the same
+model at 1 vs 8 shifts agrees on 71/72 notes. The error is bias, not variance.
+Two different models agree on only 57/72, so cross-model consensus is the
+version that could work, and is unbuilt.
 
-Measured on Agua Fria: shifts 1 -> 4 -> 8 gave 72 -> 71 -> 72 notes. Same model
-at 1 vs 8 shifts agrees on 71/72 notes, so there is no variance to average away.
-Two *different* models (htdemucs_6s vs htdemucs) agree on only 57/72.
+**htdemucs_ft as a default.** More notes, but the extras are accompaniment.
+`htdemucs_6s` reads better on both test tracks. Worth trying when a specific
+passage is missing.
 
-So error here is bias, not variance. Ensembling across shifts cannot help;
-ensembling across diverse models plausibly could, and is unbuilt. Consensus
-between two models would mark low-confidence notes the way `~` marks
-out-of-key ones, at double the separation cost.
+## Evaluating changes
 
-## --start/--end are not a clean slice
+Note count and out-of-key rate are both poor proxies. Accompaniment bleed sits
+in the same key and register as the melody, so neither number sees the failure
+mode that matters. Ask for a passage the user knows by ear and compare against
+it; every metric proposed here has at some point pointed the wrong way.
 
-Windowing clips events that straddle a boundary rather than dropping them, so a
-windowed run now matches the corresponding slice of a full run for most of its
-length. It is still not guaranteed identical: melody reduction picks a winner
-per frame from whatever events compete, so removing events changes outcomes in
-dense passages. Measured on So What (`--start 1:30`): identical for the first 24
-notes, diverging over the last ten seconds.
+## TODO
 
-**When a full-track sheet is known good, scroll it rather than re-cutting it.**
-
-## Picking a stem
-
-The default `other` stem is right for horns and is what has worked on So What:
-the trumpet enters around 1:30 and the full-track sheet at default settings is
-the version that proved playable. `--stem bass` was tried on a hunch that the
-head was the bass line; it was wrong. Do not re-theorise the arrangement —
-ask which sheet worked.
-
-## Use htdemucs_6s. Out-of-key rate does NOT measure separation quality.
-
-**Both songs read better on htdemucs_6s.** ft was recommended on the strength
-of an out-of-key comparison (So What solo: 6s 18%, ft 20% — near identical, so
-ft's doubled note count looked free). The user read the result and it was
-clearly worse.
-
-The proxy is structurally broken: **the piano plays in the same key as the
-soloist**, so accompaniment bleed is invisible to an out-of-key measure. ft's
-extra notes at 1:28 were A5, C#5, G5, C#6 — all inside E dorian, all clutter.
-Out-of-key catches detector artifacts, never bleed, and bleed is the actual
-failure mode.
-
-Adding notes also repacks the phrase lines, so a figure the user had learned to
-read on one line gets split across two. A change can hurt readability even when
-the notes it adds are right.
-
-There is no good automated proxy for separation quality here. Ask.
-
-## The melody is a connected line, not the top pitch
-
-`--melody-rule contour` (default) is a Viterbi decode whose state is the last
-pitch that sounded. It replaced the `top` rule, which handed the line to
-whatever accompaniment voiced above the soloist and grabbed strays whenever
-the soloist rested. On So What it produced a coherent line where `top` needed
-`--in-key --low 60` to be readable at all -- 106 notes clean, against 74 after
-filtering, and the filters are no longer needed.
-
-Two things are load-bearing:
-
-- **Resting keeps the pitch state.** An earlier version used a single REST
-  state with zero-cost transitions in and out, so any gap -- even 50ms between
-  two notes -- let an unrelated note rejoin the line for free. That is exactly
-  the stray-during-rests problem, and it made `--rest-threshold` do work the
-  algorithm should have done. Fixing it removed the low-register strays at a
-  *lower* threshold.
-- **Amplitude is raw, not normalised by the track's loudest note.** basic-pitch
-  amplitudes are model confidences and already comparable, so normalising made
-  `--rest-threshold` mean something different per track.
-
-## --in-key plus --low is a fallback, not the fix
-
-Superseded by contour tracking for So What; keep for material where the line
-genuinely cannot be tracked. On So What with the old `top` rule: 149 notes ->
-116 with `--low 60` -> 74 with `--in-key` as well.
-The two filters are complementary and neither substitutes for the other.
-`--in-key` removes artifacts on out-of-scale pitches (G#3, G#4 in E dorian);
-`--low` removes bass and piano that sit inside the scale but below the
-register the trumpet ever plays. Out-of-key filtering alone left F#3 and A3
-in place, because those notes are perfectly in key.
-
-Risk accepted: real chromatic passing tones are dropped. In modal jazz an
-isolated out-of-scale note is far more often an artifact.
-
-## RoFormer is not an option for horns (verified)
-
-Checked audio-separator's full catalogue: all 92 RoFormer models are 2-stem
-target/residual separators. A listing of `['vocals', 'other']` means "vocals vs
-everything else", NOT Demucs's musical `other` stem. Nothing there decomposes a
-mix into drums/bass/other, so RoFormer cannot isolate a horn no matter how good
-its SDR on vocals. The only models in the catalogue with a real multi-stem
-`other` are the Demucs family.
-
-audio-separator also hard-requires ffmpeg (it shells out in its constructor),
-which is why ffmpeg is installed on this machine. Nothing in the project uses
-it; `brew uninstall ffmpeg` is safe.
-
-Untried Demucs variant worth a look: `hdemucs_mmi` (4-stem, in the catalogue).
-
-## Other TODO
-
-- Separating a horn from the `other` stem is the real ceiling on quality.
-  Melodia was tried and removed (see below); RoFormer cannot do it (see above).
-  A horn-specific separator would be the real fix and does not exist off-shelf.
-
-- Melodia (Essentia predominant-melody) was built as a second pipeline with a
-  consensus stage, then removed at the user's call: agreement with basic-pitch
-  was 38/323 on So What, and the merged union read worse than basic-pitch alone.
-  Recoverable from git if a second opinion on a disputed note is ever wanted.
-
-- Key detection assumes one key for the whole recording. So What's bridge
-  modulates up a semitone and gets folded into one label.
-- `--melody-rule loudest` is implemented but never evaluated against `top`.
-
-## Audio quality is the top-of-funnel constraint
-
-The So What test file is 62 kbps MONO. Demucs is a stereo model, so mono
-removes spatial separation cues entirely, and low bitrate strips the high
-harmonics a pitch model needs to tell fundamentals from partials. Measured
-consequence: a 2.3-second hole (91.15-93.47s) with zero detections at loose
-thresholds, over a passage the user hears clearly. No parameter recovers this.
-Ask for better source audio before tuning.
-
-## Separation must stay deterministic
-
-`apply_model(..., shifts=0)` in separate.py is load-bearing. Demucs defaults to
-`shifts=1`, which applies a **random** time shift to the input; with one shift
-there is nothing to average, so it only randomizes. Identical input and
-settings produced different stems on every run, on MPS *and* CPU, silently
-changing the transcription -- a good result could not be reproduced, and
-re-running destroyed it. Verified fixed: two runs now yield identical stem
-hashes. Do not remove the seed or restore the default shifts.
-
-## Judge results against ground truth, not note counts
-
-I concluded loose thresholds "did not help" So What because the final note count
-barely moved (31 -> 35). That was the wrong measure. When the user supplied the
-actual notes, loosening turned out to fill a five-second hole in the solo with
-exactly the right figure. Count says nothing about correctness; only comparison
-against known notes does.
-
-## Things learned the hard way
-
-- The project is a uv project: `uv sync` to set up, `uv run transcribe.py` to run.
-  pyproject.toml is the source of truth; there is no requirements.txt.
-- essentia is pinned to 2.1b6.dev1389: newer dev builds ship cp314 wheels only.
-- basic-pitch pins `resampy<0.4.3`; that resampy imports `pkg_resources`, which
-  setuptools 81 removed. Hence `setuptools<81` in requirements.
-- Voice Memos' group container is TCC-protected — unreadable even by `head`.
-  Recordings must be dragged out to `~/Downloads` first.
-- Key detection needs modes, not just major/minor. The repertoire this gets
-  pointed at is modal: So What is dorian, Agua Fria is dorian/mixolydian, and a
-  major/minor-only fit mislabels both.
+- Separating a horn from the `other` stem is the real ceiling. No off-the-shelf
+  horn separator exists.
+- Sheet music: MusicXML with quantized rhythm and fingerings above the staff.
+  A working implementation is at `git show 3fecc51` (`render_musicxml.py`,
+  `tempo.py`) — recover rather than rewrite. Blocker is tempo: it reported 195
+  bpm for So What (true ~136) and 216 for Agua Fria (true ~108), both roughly
+  double. Halving errors are the thing to attack. Restoring it also means
+  restoring a `tempo` field to the intermediate. No triplet support; 4/4 only.
+- Key detection assumes one key per recording; So What's bridge modulates.
+- `--melody-rule loudest` is implemented but never evaluated against `contour`.
+- Voice Memos' group container is TCC-protected and unreadable even by `head`;
+  recordings must be dragged to `~/Downloads` first.

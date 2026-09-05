@@ -44,8 +44,7 @@ def split_phrases(notes: list, phrase_gap: float, max_per_line: int) -> list:
 
 
 def _key_header(key_info: dict, use_sharps: bool, show_octaves: bool) -> list:
-    # The sheet is in written pitch, so name the written key first; the concert
-    # key is what everyone else in the room is calling it.
+    # Written key first, since the sheet is in written pitch; concert second.
     concert_pc = (key_info["tonic_pc"] - trumpet.TRANSPOSE) % 12
     names = keysig.SHARP_NAMES if use_sharps else keysig.NAMES
     concert = f"{names[concert_pc]} {key_info['mode']}"
@@ -94,8 +93,8 @@ def render(
     key_info = None
     if doc.notes:
         key_info = keysig.estimate(doc.notes) if key == "auto" else keysig.from_name(key)  # noqa: E501
-        # Spell accidentals to match the key so phrase rows agree with the
-        # scale above them.
+        # Spell accidentals to match the key, so phrase rows agree with the
+        # scale above.
         use_sharps = force_sharps or key_info["use_sharps"]
         out += _key_header(key_info, use_sharps, show_octaves)
         out += ["-" * 72, ""]
