@@ -135,6 +135,18 @@ the notes it adds are right.
 
 There is no good automated proxy for separation quality here. Ask.
 
+## --in-key plus --low is the cleanup that works
+
+On So What: 149 notes -> 116 with `--low 60` -> 74 with `--in-key` as well.
+The two filters are complementary and neither substitutes for the other.
+`--in-key` removes artifacts on out-of-scale pitches (G#3, G#4 in E dorian);
+`--low` removes bass and piano that sit inside the scale but below the
+register the trumpet ever plays. Out-of-key filtering alone left F#3 and A3
+in place, because those notes are perfectly in key.
+
+Risk accepted: real chromatic passing tones are dropped. In modal jazz an
+isolated out-of-scale note is far more often an artifact.
+
 ## RoFormer is not an option for horns (verified)
 
 Checked audio-separator's full catalogue: all 92 RoFormer models are 2-stem

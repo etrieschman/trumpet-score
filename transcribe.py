@@ -101,6 +101,10 @@ def build_parser() -> argparse.ArgumentParser:
     filt.add_argument("--no-harmonic-filter", dest="harmonic_filter",
                       action="store_false",
                       help="keep detections that look like overtones of a lower note")
+    filt.add_argument("--in-key", action="store_true",
+                      help="drop notes outside the detected key (or --key). In "
+                           "modal material an isolated out-of-key note is "
+                           "usually an artifact, not a passing tone")
     filt.add_argument("--octave-shift", type=int, default=0, help="shift result by N octaves")
 
     ren = p.add_argument_group("rendering")
@@ -146,6 +150,15 @@ def main(argv=None) -> int:
             octave_shift=args.octave_shift, flats=not args.sharps,
             harmonic_filter=args.harmonic_filter,
             start_s=args.start, end_s=args.end)
+
+        if args.in_key and notes:
+            from trumpet_transcribe import keysig
+            key_info = (keysig.estimate(notes) if args.key == "auto"
+                        else keysig.from_name(args.key))
+            kept = melody.filter_to_key(notes, key_info)
+            print(f"[in-key] {len(notes) - len(kept)} of {len(notes)} notes dropped "
+                  f"as outside {key_info['tonic']} {key_info['mode']}")
+            notes = kept
 
         doc = NoteDocument(
             source=str(source), notes=notes,

@@ -103,6 +103,21 @@ def merge_repeats(events: list, merge_gap: float) -> list:
     return merged
 
 
+def filter_to_key(notes: list, key_info: dict) -> list:
+    """Drop notes outside the key's scale.
+
+    In modal jazz an isolated out-of-key note is far more often a detection
+    artifact than a chromatic passing tone, so this trades a few real
+    accidentals for a much cleaner read. The key is estimated from the
+    unfiltered notes, so filtering cannot bias the estimate that drives it.
+    """
+    from . import keysig
+
+    scale = {(key_info["tonic_pc"] + d) % 12
+             for d in keysig.DEGREES[key_info["mode"]]}
+    return [n for n in notes if n.written_midi % 12 in scale]
+
+
 def build_notes(
     events: list,
     rule: str = "top",

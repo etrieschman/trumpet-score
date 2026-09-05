@@ -102,6 +102,7 @@ busts the cache.
 | `--merge-gap` | join same-pitch notes closer than N seconds (0.06) |
 | `--melody-rule` | `top` keeps the highest voice, `loudest` the strongest |
 | `--octave-shift` | move everything by N octaves |
+| `--in-key` | drop notes outside the detected key (or `--key`) |
 | `--low` / `--high` | concert MIDI bounds for discarding garbage |
 | `--no-harmonic-filter` | disable overtone suppression |
 
@@ -117,7 +118,13 @@ uv run transcribe.py song.mp3 --onset-threshold 0.25 --frame-threshold 0.15 --mi
 ```
 
 Judge the result against a passage you already know by ear — note count is a
-poor proxy for correctness. `--merge-gap` matters most for fast playing, since
+poor proxy for correctness.
+
+For modal material, `--in-key --low N` is the strongest cleanup available. The
+two catch different things: `--in-key` removes detector artifacts on pitches
+outside the scale, `--low` removes accompaniment that is *inside* the scale but
+below the register the melody ever uses. Neither sees what the other does.
+ `--merge-gap` matters most for fast playing, since
 it fuses same-pitch notes closer together than its value. `--low` cuts a
 register the melody never enters, the cheapest way to drop accompaniment bleed.
 Notes marked `~` are the first to distrust.
