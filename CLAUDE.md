@@ -116,11 +116,31 @@ the version that proved playable. `--stem bass` was tried on a hunch that the
 head was the bass line; it was wrong. Do not re-theorise the arrangement —
 ask which sheet worked.
 
+## RoFormer is not an option for horns (verified)
+
+Checked audio-separator's full catalogue: all 92 RoFormer models are 2-stem
+target/residual separators. A listing of `['vocals', 'other']` means "vocals vs
+everything else", NOT Demucs's musical `other` stem. Nothing there decomposes a
+mix into drums/bass/other, so RoFormer cannot isolate a horn no matter how good
+its SDR on vocals. The only models in the catalogue with a real multi-stem
+`other` are the Demucs family.
+
+audio-separator also hard-requires ffmpeg (it shells out in its constructor),
+which is why ffmpeg is installed on this machine. Nothing in the project uses
+it; `brew uninstall ffmpeg` is safe.
+
+Untried Demucs variant worth a look: `hdemucs_mmi` (4-stem, in the catalogue).
+
 ## Other TODO
 
-- Separating a horn from the `other` stem is the real ceiling on quality. A
-  horn-specific separator, or a melody-salience model like MELODIA / deep
-  salience, would help more than any further filter tuning.
+- Separating a horn from the `other` stem is the real ceiling on quality.
+  Melodia was tried and removed (see below); RoFormer cannot do it (see above).
+  A horn-specific separator would be the real fix and does not exist off-shelf.
+
+- Melodia (Essentia predominant-melody) was built as a second pipeline with a
+  consensus stage, then removed at the user's call: agreement with basic-pitch
+  was 38/323 on So What, and the merged union read worse than basic-pitch alone.
+  Recoverable from git if a second opinion on a disputed note is ever wanted.
 
 - Key detection assumes one key for the whole recording. So What's bridge
   modulates up a semitone and gets folded into one label.

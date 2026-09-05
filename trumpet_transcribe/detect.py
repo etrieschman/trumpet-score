@@ -5,6 +5,7 @@ happens downstream in melody.py.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -21,8 +22,11 @@ def _model_path():
 
 
 def _cache_key(stem_path: Path, params: dict) -> dict:
-    st = stem_path.stat()
-    return {"stem": str(stem_path.resolve()), "size": st.st_size, "params": params}
+    # Hash the stem's contents, not its size: every separation model writes a
+    # stem of identical size for a given input, so a size-keyed cache serves
+    # one model's detections for another model's audio.
+    digest = hashlib.md5(stem_path.read_bytes()).hexdigest()
+    return {"stem": str(stem_path.resolve()), "digest": digest, "params": params}
 
 
 def detect(
